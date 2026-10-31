@@ -6,6 +6,20 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [1.2.0] - 2026-10-31
+
+### ✨ Añadido
+- **Sistema Multiusuario Completo (Login, Registro y Sesiones)**:
+  - Pantalla de inicio de sesión y creación de cuentas nuevas (`/api/auth/login`, `/api/auth/register`, `/api/auth/me`, `/api/auth/logout`) con tokens de sesión (`Bearer Token`) y contraseñas cifradas con `SHA-256`.
+  - Cuentas de prueba preconfiguradas (`admin` / `admin123` e `invitado` / `123456`) con migración automática de los archivos previos hacia la cuenta de administrador.
+- **Espacio Privado Aislado por Usuario (`ownerId`)**:
+  - Cada cuenta registrada posee su propia unidad privada (**Mi Unidad**), su cuota de almacenamiento independiente y su propia papelera.
+- **Colaboración entre Usuarios ("👥 Compartido conmigo")**:
+  - Permite compartir archivos o carpetas internamente con otros usuarios registrados de la nube asignando permisos de **👁️ Solo lectura** o **✏️ Edición** (permitiendo coeditar documentos `.md` y código en vivo).
+  - Tarjeta de perfil de usuario activa en la barra lateral y modal de **Directorio de Usuarios** (`GET /api/users`).
+
+---
+
 ## [1.1.0] - 2026-10-31
 
 ### ✨ Añadido

@@ -10,7 +10,9 @@
       "starred": true,
       "trashed": false,
       "createdAt": "2026-10-31T15:12:38.959107+00:00",
-      "updatedAt": "2026-10-31T15:12:38.959107+00:00"
+      "updatedAt": "2026-10-31T15:12:38.959107+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
     },
     {
       "id": "1a93a3ff-4e0c-47df-9e27-2b06f0c0cc94",
@@ -22,7 +24,9 @@
       "starred": false,
       "trashed": false,
       "createdAt": "2026-10-31T15:12:38.959107+00:00",
-      "updatedAt": "2026-10-31T15:12:38.959107+00:00"
+      "updatedAt": "2026-10-31T15:12:38.959107+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
     },
     {
       "id": "e1e7e3cb-1347-4830-96d1-50e8cf6daab0",
@@ -35,7 +39,9 @@
       "starred": true,
       "trashed": false,
       "createdAt": "2026-10-31T15:12:38.959107+00:00",
-      "updatedAt": "2026-10-31T15:12:38.959107+00:00"
+      "updatedAt": "2026-10-31T15:12:38.959107+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
     },
     {
       "id": "7d1b4795-f4a1-45c1-8b4c-1997f9b21d3d",
@@ -48,7 +54,9 @@
       "starred": false,
       "trashed": false,
       "createdAt": "2026-10-31T15:12:38.959107+00:00",
-      "updatedAt": "2026-10-31T15:12:38.959107+00:00"
+      "updatedAt": "2026-10-31T15:12:38.959107+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
     },
     {
       "id": "e20534a2-409c-4922-8ddc-f2e95fca0d1d",
@@ -61,7 +69,9 @@
       "starred": false,
       "trashed": false,
       "createdAt": "2026-10-31T15:12:38.959107+00:00",
-      "updatedAt": "2026-10-31T15:12:38.959107+00:00"
+      "updatedAt": "2026-10-31T15:12:38.959107+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
     },
     {
       "id": "5f242181-2924-4d42-9b7f-cf5e42307e44",
@@ -74,7 +84,9 @@
       "starred": false,
       "trashed": false,
       "createdAt": "2026-10-31T15:12:38.959107+00:00",
-      "updatedAt": "2026-10-31T15:12:38.959107+00:00"
+      "updatedAt": "2026-10-31T15:12:38.959107+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
     },
     {
       "id": "8d4d9d07-84cc-4956-bbdd-2cd4a0caf20e",
@@ -87,7 +99,9 @@
       "starred": false,
       "trashed": false,
       "createdAt": "2026-10-31T15:12:38.959107+00:00",
-      "updatedAt": "2026-10-31T15:12:38.959107+00:00"
+      "updatedAt": "2026-10-31T15:12:38.959107+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
     },
     {
       "id": "652a3533-5dc7-44ea-be57-c2f35808599f",
@@ -99,12 +113,257 @@
       "starred": false,
       "trashed": false,
       "createdAt": "2026-10-31T15:20:31.004120+00:00",
-      "updatedAt": "2026-10-31T15:20:31.004120+00:00"
+      "updatedAt": "2026-10-31T15:20:31.004120+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
+    },
+    {
+      "id": "be82f143-8267-4360-90f7-b34fc3e1cf03",
+      "name": "Nueva Nota.md",
+      "type": "file",
+      "parentId": null,
+      "size": 106,
+      "mimeType": "text/markdown",
+      "diskName": "be82f143-8267-4360-90f7-b34fc3e1cf03.md",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:48:06.803817+00:00",
+      "updatedAt": "2026-10-31T15:48:06.803817+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
+    },
+    {
+      "id": "3db75ec9-f797-473c-a710-e7467039b048",
+      "name": "Nueva carpeta",
+      "type": "folder",
+      "parentId": "652a3533-5dc7-44ea-be57-c2f35808599f",
+      "size": 0,
+      "mimeType": "inode/directory",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:48:32.077371+00:00",
+      "updatedAt": "2026-10-31T15:48:32.077371+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
+    },
+    {
+      "id": "190e0a81-2582-4904-abad-930092caff09",
+      "name": ".agents",
+      "type": "folder",
+      "parentId": "3db75ec9-f797-473c-a710-e7467039b048",
+      "size": 0,
+      "mimeType": "inode/directory",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:48:32.077371+00:00",
+      "updatedAt": "2026-10-31T15:48:32.077371+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
+    },
+    {
+      "id": "4cb8d472-cbdd-40bb-807a-bef62913733b",
+      "name": ".git",
+      "type": "folder",
+      "parentId": "3db75ec9-f797-473c-a710-e7467039b048",
+      "size": 0,
+      "mimeType": "inode/directory",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:48:32.077371+00:00",
+      "updatedAt": "2026-10-31T15:48:32.077371+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
+    },
+    {
+      "id": "94b04580-1850-4e8a-aef3-09c23b92b58a",
+      "name": "static",
+      "type": "folder",
+      "parentId": "3db75ec9-f797-473c-a710-e7467039b048",
+      "size": 0,
+      "mimeType": "inode/directory",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:48:32.077371+00:00",
+      "updatedAt": "2026-10-31T15:48:32.077371+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
+    },
+    {
+      "id": "ccbee43d-e302-4141-a9a4-4a1bb3592f8b",
+      "name": "__pycache__",
+      "type": "folder",
+      "parentId": "3db75ec9-f797-473c-a710-e7467039b048",
+      "size": 0,
+      "mimeType": "inode/directory",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:48:32.077371+00:00",
+      "updatedAt": "2026-10-31T15:48:32.077371+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
+    },
+    {
+      "id": "762242bb-0331-40df-b65d-ff3f91058248",
+      "name": ".env.example",
+      "type": "file",
+      "parentId": "3db75ec9-f797-473c-a710-e7467039b048",
+      "size": 224,
+      "mimeType": "application/octet-stream",
+      "diskName": "762242bb-0331-40df-b65d-ff3f91058248.example",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:48:32.077371+00:00",
+      "updatedAt": "2026-10-31T15:48:32.077371+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
+    },
+    {
+      "id": "596f9c0f-f80d-4890-bf15-9d63e0d5f432",
+      "name": ".gitignore",
+      "type": "file",
+      "parentId": "3db75ec9-f797-473c-a710-e7467039b048",
+      "size": 35,
+      "mimeType": "application/octet-stream",
+      "diskName": "596f9c0f-f80d-4890-bf15-9d63e0d5f432",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:48:32.077371+00:00",
+      "updatedAt": "2026-10-31T15:48:32.077371+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
+    },
+    {
+      "id": "289c92ad-520e-49b1-88a7-a0a3c0faa6a2",
+      "name": "app.py",
+      "type": "file",
+      "parentId": "3db75ec9-f797-473c-a710-e7467039b048",
+      "size": 5798,
+      "mimeType": "text/x-python",
+      "diskName": "289c92ad-520e-49b1-88a7-a0a3c0faa6a2.py",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:48:32.077371+00:00",
+      "updatedAt": "2026-10-31T15:48:32.077371+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
+    },
+    {
+      "id": "91373519-135c-4975-a5b1-298c2343e5ce",
+      "name": "README.md",
+      "type": "file",
+      "parentId": "3db75ec9-f797-473c-a710-e7467039b048",
+      "size": 1083,
+      "mimeType": "text/markdown",
+      "diskName": "91373519-135c-4975-a5b1-298c2343e5ce.md",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:48:32.077371+00:00",
+      "updatedAt": "2026-10-31T15:48:32.077371+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
+    },
+    {
+      "id": "423252dd-b882-4892-8109-dc4f0bc6d9c2",
+      "name": "requirements.txt",
+      "type": "file",
+      "parentId": "3db75ec9-f797-473c-a710-e7467039b048",
+      "size": 90,
+      "mimeType": "text/plain",
+      "diskName": "423252dd-b882-4892-8109-dc4f0bc6d9c2.txt",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:48:32.077371+00:00",
+      "updatedAt": "2026-10-31T15:48:32.077371+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
+    },
+    {
+      "id": "3a646ef1-0843-4cf1-8c87-799d9e57273e",
+      "name": "app.js",
+      "type": "file",
+      "parentId": "94b04580-1850-4e8a-aef3-09c23b92b58a",
+      "size": 3470,
+      "mimeType": "application/javascript",
+      "diskName": "3a646ef1-0843-4cf1-8c87-799d9e57273e.js",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:48:32.077371+00:00",
+      "updatedAt": "2026-10-31T15:48:32.077371+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
+    },
+    {
+      "id": "b4cc0749-0075-4e77-b599-aa13c5876d14",
+      "name": "index.html",
+      "type": "file",
+      "parentId": "94b04580-1850-4e8a-aef3-09c23b92b58a",
+      "size": 3286,
+      "mimeType": "text/html",
+      "diskName": "b4cc0749-0075-4e77-b599-aa13c5876d14.html",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:48:32.077371+00:00",
+      "updatedAt": "2026-10-31T15:48:32.077371+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
+    },
+    {
+      "id": "d13a7d3d-79a4-4efb-a660-dd9e4cc8dbac",
+      "name": "styles.css",
+      "type": "file",
+      "parentId": "94b04580-1850-4e8a-aef3-09c23b92b58a",
+      "size": 5285,
+      "mimeType": "text/css",
+      "diskName": "d13a7d3d-79a4-4efb-a660-dd9e4cc8dbac.css",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:48:32.077371+00:00",
+      "updatedAt": "2026-10-31T15:48:32.077371+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
+    },
+    {
+      "id": "289e8b6a-f8b4-4faa-bf72-9f8fc6202da8",
+      "name": "app.cpython-313.pyc",
+      "type": "file",
+      "parentId": "ccbee43d-e302-4141-a9a4-4a1bb3592f8b",
+      "size": 11107,
+      "mimeType": "application/x-python-code",
+      "diskName": "289e8b6a-f8b4-4faa-bf72-9f8fc6202da8.pyc",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:48:32.077371+00:00",
+      "updatedAt": "2026-10-31T15:48:32.077371+00:00",
+      "ownerId": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "sharedWith": []
     }
   ],
   "shares": [],
   "settings": {
     "quotaBytes": 5368709120,
     "pinHash": ""
-  }
+  },
+  "users": [
+    {
+      "id": "5dbb6450-89e5-4dcd-b7cc-7ef26e22a772",
+      "username": "admin",
+      "displayName": "Administrador Principal",
+      "passwordHash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+      "role": "admin",
+      "avatarColor": "#38bdf8",
+      "quotaBytes": 5368709120,
+      "createdAt": "2026-10-31T15:58:51.050017+00:00"
+    },
+    {
+      "id": "16297115-6127-4f6e-a6a8-407b35e2f562",
+      "username": "invitado",
+      "displayName": "Usuario Invitado",
+      "passwordHash": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+      "role": "user",
+      "avatarColor": "#10b981",
+      "quotaBytes": 2147483648,
+      "createdAt": "2026-10-31T15:58:51.050017+00:00"
+    }
+  ],
+  "sessions": {}
 }

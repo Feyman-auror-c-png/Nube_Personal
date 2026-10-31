@@ -1,7 +1,7 @@
 {
   "name": "nube-personal",
-  "version": "1.1.0",
-  "description": "Nimbus Cloud (v1.1.0) — Nube Personal Web con visualizador/editor de Markdown (.md), vista previa multimedia, carpetas y enlaces compartidos",
+  "version": "1.2.0",
+  "description": "Nimbus Cloud (v1.2.0) — Nube Personal Web Multiusuario con visualizador/editor de Markdown (.md), vista previa multimedia, carpetas y enlaces compartidos",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

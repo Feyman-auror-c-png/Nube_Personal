@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Nimbus Cloud — Mi Nube Personal</title>
+  <title>Nimbus Cloud v1.2.0 — Nube Personal Multiusuario</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -13,6 +13,68 @@
       <div class="dropzone-icon">☁️📂⬆️</div>
       <h2>Suelta tus archivos o carpetas completas aquí</h2>
       <p id="dropzone-target-label">Se conservará toda la estructura de subcarpetas automáticamente</p>
+    </div>
+  </div>
+
+  <!-- PANTALLA DE AUTENTICACIÓN MULTIUSUARIO (LOGIN / REGISTRO) -->
+  <div id="auth-screen" class="auth-screen hidden">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <div class="brand-logo">☁️</div>
+        <div>
+          <div class="brand-title">Nimbus Cloud <span class="brand-badge">v1.2.0</span></div>
+          <div class="brand-subtitle">Plataforma de Nube Personal Multiusuario</div>
+        </div>
+      </div>
+
+      <div class="auth-tabs">
+        <button type="button" class="auth-tab active" data-tab="login">🔑 Iniciar Sesión</button>
+        <button type="button" class="auth-tab" data-tab="register">✨ Crear Cuenta</button>
+      </div>
+
+      <!-- Formulario de Login -->
+      <form id="login-form" class="auth-form">
+        <div class="form-group">
+          <label for="login-username">Usuario</label>
+          <input type="text" id="login-username" placeholder="Ej. admin o tu usuario" required autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label for="login-password">Contraseña</label>
+          <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password" />
+        </div>
+        <p id="login-error" class="auth-error hidden"></p>
+        <button type="submit" class="btn btn-primary btn-block">Entrar a Mi Nube</button>
+
+        <div class="auth-quick-accounts">
+          <span class="preview-meta">Acceso rápido de prueba:</span>
+          <div class="auth-quick-btns">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-demo-admin">
+              👑 Admin (admin)
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-demo-guest">
+              👤 Invitado (invitado)
+            </button>
+          </div>
+        </div>
+      </form>
+
+      <!-- Formulario de Registro -->
+      <form id="register-form" class="auth-form hidden">
+        <div class="form-group">
+          <label for="reg-displayname">Nombre completo o alias</label>
+          <input type="text" id="reg-displayname" placeholder="Ej. Daniel Connor" required />
+        </div>
+        <div class="form-group">
+          <label for="reg-username">Nombre de usuario (sin espacios)</label>
+          <input type="text" id="reg-username" placeholder="Ej. daniel" required autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label for="reg-password">Contraseña (mín. 4 caracteres)</label>
+          <input type="password" id="reg-password" placeholder="••••••••" required autocomplete="new-password" />
+        </div>
+        <p id="register-error" class="auth-error hidden"></p>
+        <button type="submit" class="btn btn-primary btn-block">Crear Mi Espacio en la Nube</button>
+      </form>
     </div>
   </div>
 
@@ -35,14 +97,27 @@
   </div>
 
   <!-- APLICACIÓN PRINCIPAL DE LA NUBE PERSONAL -->
-  <div id="main-cloud-app" class="app-layout">
+  <div id="main-cloud-app" class="app-layout hidden">
     <!-- Barra Lateral -->
     <aside class="sidebar" id="sidebar">
       <div class="brand">
         <div class="brand-logo">☁️</div>
         <div>
-          <div class="brand-title">Nimbus Cloud <span class="brand-badge" style="margin-left:4px;font-size:0.68rem;">v1.1.0</span></div>
-          <div class="brand-subtitle">Tu Nube Personal</div>
+          <div class="brand-title">Nimbus Cloud <span class="brand-badge" style="margin-left:4px;font-size:0.68rem;">v1.2.0</span></div>
+          <div class="brand-subtitle">Nube Personal Multiusuario</div>
+        </div>
+      </div>
+
+      <!-- Tarjeta de Perfil del Usuario Activo -->
+      <div class="user-profile-card">
+        <div class="user-avatar" id="current-user-avatar">U</div>
+        <div class="user-info">
+          <div class="user-displayname" id="current-user-name">Usuario</div>
+          <div class="user-handle" id="current-user-handle">@usuario</div>
+        </div>
+        <div class="user-actions">
+          <button class="icon-btn btn-sm-icon" id="btn-users-directory" title="Ver usuarios de la nube">👥</button>
+          <button class="icon-btn btn-sm-icon" id="btn-logout" title="Cerrar sesión / Cambiar de usuario">🚪</button>
         </div>
       </div>
 
@@ -70,6 +145,11 @@
           <span class="nav-icon">🗂️</span>
           <span class="nav-label">Mi Unidad</span>
         </button>
+        <button class="nav-item" data-section="shared-with-me">
+          <span class="nav-icon">👥</span>
+          <span class="nav-label">Compartido conmigo</span>
+          <span class="nav-badge hidden" id="badge-shared-with-me">0</span>
+        </button>
         <button class="nav-item" data-section="recent">
           <span class="nav-icon">🕒</span>
           <span class="nav-label">Recientes</span>
@@ -84,7 +164,7 @@
         </button>
         <button class="nav-item" data-section="shares">
           <span class="nav-icon">🔗</span>
-          <span class="nav-label">Compartidos</span>
+          <span class="nav-label">Enlaces Públicos</span>
           <span class="nav-badge hidden" id="badge-shares">0</span>
         </button>
         <button class="nav-item" data-section="trash">
@@ -95,7 +175,7 @@
 
       <div class="storage-card">
         <div class="storage-header">
-          <span class="storage-title">💾 Almacenamiento</span>
+          <span class="storage-title">💾 Mi Espacio</span>
           <span class="storage-percent" id="storage-percent">0%</span>
         </div>
         <div class="storage-bar">
@@ -242,7 +322,7 @@
     </div>
   </div>
 
-  <!-- MODAL: COMPARTIR ARCHIVO O CARPETA -->
+  <!-- MODAL: COMPARTIR (ENTRE USUARIOS Y ENLACE PÚBLICO) -->
   <div id="share-modal" class="modal-backdrop hidden">
     <div class="modal-window modal-md">
       <div class="modal-header">
@@ -252,52 +332,77 @@
         </div>
         <button class="icon-btn" id="share-modal-close">✕</button>
       </div>
-      <div class="modal-body">
-        <form id="create-share-form" class="share-form">
-          <div class="form-row">
-            <div class="form-group">
-              <label for="share-password">Contraseña opcional</label>
-              <input
-                type="password"
-                id="share-password"
-                placeholder="Sin contraseña (acceso directo)"
-                autocomplete="new-password"
-              />
+      <div class="modal-body" style="max-height: 78vh; overflow-y: auto;">
+        <!-- SECCIÓN 1: Compartir internamente con usuarios registrados -->
+        <div class="share-section-block">
+          <h4 class="share-section-title">👥 Compartir con otro usuario de la nube</h4>
+          <form id="share-user-form" class="share-user-form">
+            <div class="form-row">
+              <div class="form-group" style="margin-bottom:0">
+                <label for="share-target-user">Usuario destinatario</label>
+                <select id="share-target-user"></select>
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label for="share-target-perm">Nivel de permiso</label>
+                <select id="share-target-perm">
+                  <option value="view">👁️ Solo lectura (Ver y descargar)</option>
+                  <option value="edit">✏️ Editor (Ver y modificar)</option>
+                </select>
+              </div>
             </div>
-            <div class="form-group">
-              <label for="share-expiry">Expiración del enlace</label>
-              <select id="share-expiry">
-                <option value="0">Sin fecha de expiración</option>
-                <option value="1">En 1 hora</option>
-                <option value="24">En 24 horas</option>
-                <option value="168">En 7 días</option>
-                <option value="720">En 30 días</option>
-              </select>
-            </div>
-          </div>
-          <button type="submit" class="btn btn-primary btn-block">
-            ✨ Generar Enlace para Compartir
-          </button>
-        </form>
-
-        <div id="share-generated-box" class="share-result-box hidden">
-          <label>Enlace listo para compartir:</label>
-          <div class="share-url-row">
-            <input type="text" id="share-url-input" readonly />
-            <button type="button" class="btn btn-primary btn-sm" id="btn-copy-share-url">📋 Copiar</button>
-            <a id="btn-open-share-url" href="#" target="_blank" class="btn btn-secondary btn-sm">↗ Abrir</a>
-          </div>
+            <button type="submit" class="btn btn-accent-outline btn-block" style="margin-top:10px">
+              🤝 Dar Acceso al Usuario
+            </button>
+          </form>
+          <div id="shared-users-list" class="item-shares-list" style="margin-top:10px"></div>
         </div>
 
+        <!-- SECCIÓN 2: Crear enlace público externo -->
         <div class="existing-shares-section">
-          <h4>Enlaces activos de este elemento</h4>
-          <div id="item-shares-list" class="item-shares-list"></div>
+          <h4 class="share-section-title">🌐 Enlace público externo (?share=TOKEN)</h4>
+          <form id="create-share-form" class="share-form">
+            <div class="form-row">
+              <div class="form-group" style="margin-bottom:0">
+                <label for="share-password">Contraseña opcional</label>
+                <input
+                  type="password"
+                  id="share-password"
+                  placeholder="Sin contraseña (público)"
+                  autocomplete="new-password"
+                />
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label for="share-expiry">Expiración del enlace</label>
+                <select id="share-expiry">
+                  <option value="0">Sin fecha de expiración</option>
+                  <option value="1">En 1 hora</option>
+                  <option value="24">En 24 horas</option>
+                  <option value="168">En 7 días</option>
+                  <option value="720">En 30 días</option>
+                </select>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block" style="margin-top:10px">
+              ✨ Generar Enlace Público
+            </button>
+          </form>
+
+          <div id="share-generated-box" class="share-result-box hidden">
+            <label>Enlace listo para compartir:</label>
+            <div class="share-url-row">
+              <input type="text" id="share-url-input" readonly />
+              <button type="button" class="btn btn-primary btn-sm" id="btn-copy-share-url">📋 Copiar</button>
+              <a id="btn-open-share-url" href="#" target="_blank" class="btn btn-secondary btn-sm">↗ Abrir</a>
+            </div>
+          </div>
+
+          <div id="item-shares-list" class="item-shares-list" style="margin-top:10px"></div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- MODAL: CREAR / RENOMBRAR / MOVER -->
+  <!-- MODAL: CREAR / RENOMBRAR / MOVER / DIRECTORIO DE USUARIOS -->
   <div id="dialog-modal" class="modal-backdrop hidden">
     <div class="modal-window modal-sm">
       <div class="modal-header">

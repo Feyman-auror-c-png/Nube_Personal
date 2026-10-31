@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SAT | Notificaciones de Embarques</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">STC</span><div><strong>SAT Notificaciones</strong><small>Puerto Santo Tomás de Castilla</small></div></div>
+      <div id="connection-status" class="connection checking"><i></i><span>Verificando conexión</span></div>
+    </header>
+    <main class="page-shell">
+      <section class="hero">
+        <p class="eyebrow">GESTIÓN DE EMBARQUES</p>
+        <h1>Notificaciones SAT</h1>
+        <p>Pegue el JSON de la notificación. La aplicación lo envía a SAT sin modificar su estructura y gestiona la autenticación automáticamente.</p>
+      </section>
+
+      <section class="tabs" aria-label="Tipo de operación">
+        <button class="tab active" type="button" data-tab="create">Crear notificación</button>
+        <button class="tab" type="button" data-tab="update">Actualizar notificación</button>
+      </section>
+
+      <form id="create-form" class="notification-form" novalidate>
+        <section class="card json-card">
+          <div class="card-title"><div><p class="eyebrow">CREACIÓN</p><h2>Pegar JSON de creación</h2><p class="muted">El JSON se enviará tal como fue escrito a <code>postNotificacionSAEM</code>.</p></div></div>
+          <textarea class="json-input" aria-label="JSON de creación" spellcheck="false" required placeholder='{"idVumar":"7780","tipoCarga":"Contenedores Llenos","noSolicitud":"...","nombreDeBuque":"...","detalles":[]}'></textarea>
+        </section>
+        <div class="actions"><button class="button primary" type="submit">Enviar creación <span>→</span></button></div>
+      </form>
+
+      <form id="update-form" class="notification-form hidden" novalidate>
+        <section class="card json-card">
+          <div class="card-title"><div><p class="eyebrow">ACTUALIZACIÓN</p><h2>Pegar JSON de actualización</h2><p class="muted">El JSON se enviará tal como fue escrito a <code>postNotificacioAESAEM</code>.</p></div></div>
+          <textarea class="json-input" aria-label="JSON de actualización" spellcheck="false" required placeholder='{"tipoCarga":"Contenedores Llenos","idVumar":"7780","noSolicitud":"TST260010203","estadoSolicitud":"Autorizada","fechaModificaGen":"2026-10-01T19:26:47","detalles":[{"noDeclaracion":"GTSTCST-26-125544-0001-6","noContenedor":"NA","detalles":[{"idDetalle":"SDD2600133987","noDeclaracion":"NA","noContenedor":"CAIU5546212","estadoDetalle":"Autorizada","fechaModificaDet":"2026-10-01T19:26:47"}]}]}'></textarea>
+        </section>
+        <div class="actions"><button class="button primary" type="submit">Enviar actualización <span>→</span></button></div>
+      </form>
+
+      <section id="result-panel" class="result-panel hidden" aria-live="polite">
+        <div class="result-heading"><strong id="result-title"></strong><button id="close-result" type="button" aria-label="Cerrar resultado">×</button></div>
+        <pre id="result-content"></pre>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

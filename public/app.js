@@ -1,15 +1,20 @@
 /**
- * Nimbus Cloud — Cliente Web Completo para Nube Personal
- * Incluye: Explorador de carpetas, Drag & Drop, Estudio Markdown (.md) con edición en vivo,
- * Previsualizador Multimedia/PDF/CSV/Código y Sistema de Enlaces Compartidos.
+ * Nimbus Cloud v1.2.0 — Cliente Web Multiusuario para Nube Personal
+ * Incluye: Login/Registro, Espacio privado por usuario, "Compartido conmigo" (Lectura/Edición),
+ * Explorador de carpetas, Drag & Drop recursivo de carpetas, Estudio Markdown (.md) en vivo,
+ * Selectores personalizados (.custom-select) y Enlaces públicos (?share=TOKEN).
  */
 
 const state = {
+  authToken: localStorage.getItem("nimbus_token") || "",
+  currentUser: null,
+  users: [],
   items: [],
+  sharedWithMe: [],
   shares: [],
   breadcrumbs: [],
   stats: { usedBytes: 0, trashBytes: 0, quotaBytes: 5 * 1024 * 1024 * 1024, totalFiles: 0, totalFolders: 0 },
-  currentSection: "drive", // drive | recent | starred | markdown | shares | trash
+  currentSection: "drive", // drive | shared-with-me | recent | starred | markdown | shares | trash
   currentFolderId: null,
   searchQuery: "",
   typeFilter: "all", // all | md | image | media | code | doc
@@ -24,8 +29,22 @@ const state = {
 };
 
 // ============================================================================
-// UTILIDADES DE FORMATO Y CLASIFICACIÓN DE ARCHIVOS
+// UTILIDADES DE RED AUTENTICADA Y FORMATO
 // ============================================================================
+
+function apiFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (state.authToken) {
+    headers.set("Authorization", `Bearer ${state.authToken}`);
+  }
+  return fetch(url, { ...options, headers });
+}
+
+function withAuthUrl(url) {
+  if (!state.authToken) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}token=${encodeURIComponent(state.authToken)}`;
+}
 
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return "0 B";
@@ -115,7 +134,7 @@ function showToast(message, icon = "✨") {
   container.appendChild(el);
   setTimeout(() => {
     el.style.opacity = "0";
-    el.style. transition = "opacity 0.25s";
+    el.style.transition = "opacity 0.25s";
     setTimeout(() => el.remove(), 260);
   }, 3200);
 }
@@ -130,17 +149,20 @@ function renderMarkdown(mdText = "") {
   const codeBlocks = [];
   let text = mdText.replace(/\r\n/g, "\n");
 
-  // 1. Extraer bloques de código cercados ```lang ... ```
   text = text.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (_match, lang, code) => {
     const idx = codeBlocks.length;
-    const langLabel = lang ? `<div style="font-size:0.74rem;color:#94a3b8;margin-bottom:6px;font-family:sans-serif;text-transform:uppercase;letter-spacing:0.05em">${escapeHtml(lang)}</div>` : "";
+    const langLabel = lang
+      ? `<div style="font-size:0.74rem;color:#94a3b8;margin-bottom:6px;font-family:sans-serif;text-transform:uppercase;letter-spacing:0.05em">${escapeHtml(
+          lang
+        )}</div>`
+      : "";
     codeBlocks.push(`<pre>${langLabel}<code>${escapeHtml(code.replace(/\n$/, ""))}</code></pre>`);
     return `\n@@CODEBLOCK_${idx}@@\n`;
   });
 
   const lines = text.split("\n");
   const out = [];
-  let inList = null; // 'ul' | 'ol'
+  let inList = null;
   let inTable = false;
   let tableRows = [];
 
@@ -156,7 +178,7 @@ function renderMarkdown(mdText = "") {
     inTable = false;
     if (tableRows.length === 0) return;
     const headerCells = tableRows[0];
-    const bodyRows = tableRows.slice(2); // saltar fila separadora |---|---|
+    const bodyRows = tableRows.slice(2);
     let html = "<table><thead><tr>";
     for (const c of headerCells) {
       html += `<th>${parseInlineMarkdown(c.trim())}</th>`;
@@ -178,7 +200,6 @@ function renderMarkdown(mdText = "") {
     const rawLine = lines[i];
     const trimmed = rawLine.trim();
 
-    // Marcador de bloque de código
     const codeMatch = trimmed.match(/^@@CODEBLOCK_(\d+)@@$/);
     if (codeMatch) {
       flushList();
@@ -187,13 +208,10 @@ function renderMarkdown(mdText = "") {
       continue;
     }
 
-    // Detectar tablas GFM | col1 | col2 |
     if (trimmed.startsWith("|") && trimmed.endsWith("|") && trimmed.length > 2) {
       flushList();
       inTable = true;
-      const cells = trimmed
-        .slice(1, -1)
-        .split("|");
+      const cells = trimmed.slice(1, -1).split("|");
       tableRows.push(cells);
       continue;
     } else if (inTable) {
@@ -205,14 +223,12 @@ function renderMarkdown(mdText = "") {
       continue;
     }
 
-    // Línea horizontal
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
       flushList();
       out.push("<hr />");
       continue;
     }
 
-    // Encabezados # a ####
     const hMatch = trimmed.match(/^(#{1,4})\s+(.*)$/);
     if (hMatch) {
       flushList();
@@ -221,7 +237,6 @@ function renderMarkdown(mdText = "") {
       continue;
     }
 
-    // Citas >
     if (trimmed.startsWith(">")) {
       flushList();
       const quoteText = trimmed.replace(/^>\s?/, "");
@@ -229,7 +244,6 @@ function renderMarkdown(mdText = "") {
       continue;
     }
 
-    // Lista de tareas - [x] o - [ ]
     const taskMatch = trimmed.match(/^[-*]\s+\[([ xX])\]\s+(.*)$/);
     if (taskMatch) {
       if (inList !== "ul") {
@@ -241,14 +255,13 @@ function renderMarkdown(mdText = "") {
       out.push(
         `<li style="display:flex;align-items:center;gap:8px;"><input type="checkbox" disabled ${
           checked ? "checked" : ""
-        } /> <span style="${checked ? "text-decoration:line-through;opacity:0.7" : ""}">${parseInlineMarkdown(
-          taskMatch[2]
-        )}</span></li>`
+        } /> <span style="${
+          checked ? "text-decoration:line-through;opacity:0.7" : ""
+        }">${parseInlineMarkdown(taskMatch[2])}</span></li>`
       );
       continue;
     }
 
-    // Lista desordenada - o *
     const ulMatch = trimmed.match(/^[-*+]\s+(.*)$/);
     if (ulMatch) {
       if (inList !== "ul") {
@@ -260,7 +273,6 @@ function renderMarkdown(mdText = "") {
       continue;
     }
 
-    // Lista ordenada 1.
     const olMatch = trimmed.match(/^\d+\.\s+(.*)$/);
     if (olMatch) {
       if (inList !== "ol") {
@@ -283,17 +295,11 @@ function renderMarkdown(mdText = "") {
 
 function parseInlineMarkdown(str) {
   let s = escapeHtml(str);
-  // Código en línea `code`
   s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
-  // Imágenes ![alt](url)
   s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" />');
-  // Enlaces [texto](url)
   s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-  // Negrita **texto**
   s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  // Cursiva *texto*
   s = s.replace(/\*([^*]+)\*/g, "<em>$1</em>");
-  // Tachado ~~texto~~
   s = s.replace(/~~([^~]+)~~/g, "<del>$1</del>");
   return s;
 }
@@ -324,30 +330,136 @@ function renderCsvTable(csvText = "") {
 }
 
 // ============================================================================
+// AUTENTICACIÓN MULTIUSUARIO (LOGIN, REGISTRO, PERFIL Y DIRECTORIO)
+// ============================================================================
+
+async function checkSessionAndStart() {
+  if (!state.authToken) {
+    showAuthScreen();
+    return;
+  }
+  try {
+    const res = await apiFetch("/api/auth/me");
+    if (!res.ok) {
+      state.authToken = "";
+      localStorage.removeItem("nimbus_token");
+      showAuthScreen();
+      return;
+    }
+    const data = await res.json();
+    state.currentUser = data.user;
+    enterAuthenticatedApp();
+  } catch {
+    showAuthScreen();
+  }
+}
+
+function showAuthScreen() {
+  document.getElementById("main-cloud-app").classList.add("hidden");
+  document.getElementById("auth-screen").classList.remove("hidden");
+}
+
+function enterAuthenticatedApp() {
+  document.getElementById("auth-screen").classList.add("hidden");
+  document.getElementById("main-cloud-app").classList.remove("hidden");
+  renderUserProfileWidget();
+  fetchCloudData();
+}
+
+function renderUserProfileWidget() {
+  const u = state.currentUser;
+  if (!u) return;
+  const avatar = document.getElementById("current-user-avatar");
+  const initials = (u.displayName || u.username || "U")
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  avatar.textContent = initials;
+  avatar.style.background = u.avatarColor || "var(--accent)";
+  document.getElementById("current-user-name").textContent = u.displayName || u.username;
+  document.getElementById("current-user-handle").textContent = `@${u.username} · ${
+    u.role === "admin" ? "👑 Admin" : "Usuario"
+  }`;
+}
+
+function openUsersDirectoryModal() {
+  const rowsHtml = state.users
+    .map((u) => {
+      const isMe = state.currentUser && u.id === state.currentUser.id;
+      return `
+        <div class="share-list-item" style="margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="user-avatar" style="width:32px;height:32px;font-size:0.8rem;background:${escapeHtml(
+              u.avatarColor || "#38bdf8"
+            )}">${escapeHtml((u.displayName || u.username).slice(0, 2).toUpperCase())}</div>
+            <div>
+              <strong>${escapeHtml(u.displayName)}</strong> ${
+        isMe ? '<span class="brand-badge">Tú</span>' : ""
+      }
+              <div class="preview-meta">@${escapeHtml(u.username)} · ${
+        u.filesCount || 0
+      } archivos (${formatBytes(u.usedBytes || 0)})</div>
+            </div>
+          </div>
+          <span class="preview-meta">${u.role === "admin" ? "👑 Admin" : "👤 Usuario"}</span>
+        </div>
+      `;
+    })
+    .join("");
+
+  openDialogModal({
+    title: `👥 Usuarios de Nimbus Cloud (${state.users.length})`,
+    confirmText: "Cerrar",
+    contentHtml: `
+      <p class="preview-meta" style="margin-bottom:12px;">
+        Cada usuario tiene su propio espacio privado y puede compartir archivos o carpetas con los demás.
+      </p>
+      <div style="max-height:260px;overflow-y:auto;">${rowsHtml}</div>
+    `,
+    onConfirm: async () => {},
+  });
+}
+
+// ============================================================================
 // CARGA DE DATOS Y RENDERIZADO DEL EXPLORADOR
 // ============================================================================
 
 async function fetchCloudData() {
+  if (!state.authToken) return;
   try {
     const parentParam = state.currentFolderId || "";
-    const [itemsRes, sharesRes] = await Promise.all([
-      fetch(`/api/items?parentId=${encodeURIComponent(parentParam)}`),
-      fetch("/api/shares"),
+    const [itemsRes, sharesRes, usersRes] = await Promise.all([
+      apiFetch(`/api/items?parentId=${encodeURIComponent(parentParam)}`),
+      apiFetch("/api/shares"),
+      apiFetch("/api/users"),
     ]);
+
+    if (itemsRes.status === 401) {
+      state.authToken = "";
+      localStorage.removeItem("nimbus_token");
+      showAuthScreen();
+      return;
+    }
+
     const itemsData = await itemsRes.json();
     const sharesData = await sharesRes.json();
+    const usersData = await usersRes.json();
 
     state.items = itemsData.items || [];
+    state.sharedWithMe = itemsData.sharedWithMe || [];
     state.breadcrumbs = itemsData.breadcrumbs || [];
     state.stats = itemsData.stats || state.stats;
     state.shares = sharesData.shares || [];
+    state.users = usersData.users || [];
 
     renderStorageWidget();
     renderBreadcrumbs();
     renderExplorer();
   } catch (err) {
     console.error(err);
-    showToast("Error al conectar con el servidor de la nube", "⚠️");
+    showToast("Error al sincronizar con el servidor de la nube", "⚠️");
   }
 }
 
@@ -366,12 +478,14 @@ function renderStorageWidget() {
   ).textContent = `${totalFiles} archivos · ${totalFolders} carpetas`;
 
   const activeSharesCount = state.shares.filter((s) => !s.expired).length;
-  const badge = document.getElementById("badge-shares");
-  if (activeSharesCount > 0) {
-    badge.textContent = String(activeSharesCount);
-    badge.classList.remove("hidden");
-  } else {
-    badge.classList.add("hidden");
+  const badgeShares = document.getElementById("badge-shares");
+  badgeShares.textContent = String(activeSharesCount);
+  badgeShares.classList.toggle("hidden", activeSharesCount === 0);
+
+  const badgeSharedMe = document.getElementById("badge-shared-with-me");
+  if (badgeSharedMe) {
+    badgeSharedMe.textContent = String(state.sharedWithMe.length);
+    badgeSharedMe.classList.toggle("hidden", state.sharedWithMe.length === 0);
   }
 }
 
@@ -388,10 +502,11 @@ function renderBreadcrumbs() {
 
   if (state.currentSection !== "drive") {
     const titles = {
+      "shared-with-me": "👥 Compartido Conmigo por Otros Usuarios",
       recent: "🕒 Archivos Recientes",
       starred: "⭐ Elementos Destacados",
       markdown: "📝 Documentos Markdown (.md)",
-      shares: "🔗 Enlaces Compartidos Activos",
+      shares: "🔗 Mis Enlaces Públicos Activos",
       trash: "🗑️ Papelera de Reciclaje",
     };
     bar.innerHTML = `<span class="crumb active">${titles[state.currentSection] || "Mi Nube"}</span>`;
@@ -415,10 +530,21 @@ function renderBreadcrumbs() {
   });
 }
 
+function findItemAnywhere(id) {
+  return (
+    state.items.find((i) => i.id === id) ||
+    state.sharedWithMe.find((i) => i.id === id) ||
+    null
+  );
+}
+
 function getFilteredAndSortedItems() {
   const q = state.searchQuery.trim().toLowerCase();
 
-  let list = state.items.filter((item) => {
+  let sourceList =
+    state.currentSection === "shared-with-me" ? state.sharedWithMe : state.items;
+
+  let list = sourceList.filter((item) => {
     if (state.currentSection === "trash") {
       return Boolean(item.trashed);
     }
@@ -428,6 +554,9 @@ function getFilteredAndSortedItems() {
       return item.name.toLowerCase().includes(q);
     }
 
+    if (state.currentSection === "shared-with-me") {
+      return true;
+    }
     if (state.currentSection === "drive") {
       return (item.parentId || null) === (state.currentFolderId || null);
     }
@@ -443,7 +572,6 @@ function getFilteredAndSortedItems() {
     return true;
   });
 
-  // Filtro por tipo en la barra superior
   if (state.typeFilter !== "all") {
     list = list.filter((item) => {
       const cat = getFileCategory(item);
@@ -456,7 +584,6 @@ function getFilteredAndSortedItems() {
     });
   }
 
-  // Ordenar: Carpetas siempre primero en Mi Unidad, luego criterio elegido
   list.sort((a, b) => {
     if (state.currentSection === "drive" && a.type !== b.type) {
       return a.type === "folder" ? -1 : 1;
@@ -473,7 +600,6 @@ function getFilteredAndSortedItems() {
 function renderExplorer() {
   const container = document.getElementById("items-container");
 
-  // Vista especial de Enlaces Compartidos
   if (state.currentSection === "shares") {
     renderSharesSection(container);
     return;
@@ -486,18 +612,28 @@ function renderExplorer() {
     container.className = "";
     container.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">${state.currentSection === "trash" ? "🗑️" : "☁️"}</div>
+        <div class="empty-icon">${
+          state.currentSection === "trash"
+            ? "🗑️"
+            : state.currentSection === "shared-with-me"
+            ? "👥"
+            : "☁️"
+        }</div>
         <h3>${
           state.searchQuery
             ? "No se encontraron resultados para tu búsqueda"
             : state.currentSection === "trash"
             ? "La papelera está vacía"
+            : state.currentSection === "shared-with-me"
+            ? "Aún no han compartido archivos contigo"
             : "Esta carpeta está vacía"
         }</h3>
         <p>${
-          state.currentSection === "trash"
+          state.currentSection === "shared-with-me"
+            ? "Cuando otro usuario de la nube comparta un archivo o carpeta contigo, aparecerá aquí."
+            : state.currentSection === "trash"
             ? "Los elementos eliminados aparecerán aquí por si necesitas restaurarlos."
-            : "Arrastra y suelta archivos aquí desde tu equipo, o usa los botones + Nuevo .md / + Carpeta."
+            : "Arrastra y suelta archivos o carpetas completas aquí desde tu PC, o usa los botones laterales."
         }</p>
       </div>
     `;
@@ -517,14 +653,23 @@ function buildGridCardHtml(item) {
   const cat = getFileCategory(item);
   const icon = getFileIcon(item);
   const isImg = cat === "image";
+  const isOwner = item.myPermission === "owner";
 
   const previewVisual = isImg
-    ? `<img src="/api/files/${item.id}/preview" alt="${escapeHtml(item.name)}" loading="lazy" />`
+    ? `<img src="${withAuthUrl(`/api/files/${item.id}/preview`)}" alt="${escapeHtml(item.name)}" loading="lazy" />`
     : `<div class="card-big-icon">${icon}</div>`;
 
   const badges = [];
   if (cat === "md") badges.push(`<span class="badge-pill badge-md">MARKDOWN</span>`);
-  if (item.isShared) badges.push(`<span class="badge-pill badge-shared">🔗 Compartido</span>`);
+  if (!isOwner) {
+    badges.push(
+      `<span class="badge-pill badge-collab">De @${escapeHtml(item.ownerUsername || "usuario")} (${
+        item.myPermission === "edit" ? "✏️ Editor" : "👁️ Lectura"
+      })</span>`
+    );
+  } else if (item.isShared) {
+    badges.push(`<span class="badge-pill badge-shared">🔗 Compartido</span>`);
+  }
 
   const subLeft =
     item.type === "folder"
@@ -532,17 +677,17 @@ function buildGridCardHtml(item) {
       : formatBytes(item.size);
 
   return `
-    <div class="item-card" data-id="${item.id}" data-type="${item.type}" draggable="${!item.trashed}">
+    <div class="item-card" data-id="${item.id}" data-type="${item.type}" draggable="${!item.trashed && isOwner}">
       <div class="card-preview">
         ${previewVisual}
         <div class="card-badges">${badges.join("")}</div>
         <div class="card-top-actions">
           ${
-            !item.trashed
+            !item.trashed && isOwner
               ? `<button class="card-action-btn btn-star" data-id="${item.id}" title="${
                   item.starred ? "Quitar de destacados" : "Destacar"
                 }">${item.starred ? "⭐" : "☆"}</button>
-                 <button class="card-action-btn btn-share-item" data-id="${item.id}" title="Compartir enlace">🔗</button>`
+                 <button class="card-action-btn btn-share-item" data-id="${item.id}" title="Compartir">🔗</button>`
               : ""
           }
           <button class="card-action-btn btn-more-item" data-id="${item.id}" title="Más opciones">⋮</button>
@@ -562,6 +707,7 @@ function buildGridCardHtml(item) {
 function buildListRowHtml(item) {
   const icon = getFileIcon(item);
   const cat = getFileCategory(item);
+  const isOwner = item.myPermission === "owner";
   const subSize =
     item.type === "folder"
       ? `${item.childrenCount || 0} elem. (${formatBytes(item.size)})`
@@ -573,13 +719,19 @@ function buildListRowHtml(item) {
       <div class="list-name-wrap">
         <span class="list-name">${escapeHtml(item.name)}</span>
         ${cat === "md" ? `<span class="badge-pill badge-md">.md</span>` : ""}
-        ${item.isShared ? `<span class="badge-pill badge-shared">🔗</span>` : ""}
+        ${
+          !isOwner
+            ? `<span class="badge-pill badge-collab">De @${escapeHtml(item.ownerUsername)}</span>`
+            : item.isShared
+            ? `<span class="badge-pill badge-shared">🔗</span>`
+            : ""
+        }
       </div>
       <div class="list-meta">${subSize}</div>
       <div class="list-meta">${formatDate(item.updatedAt)}</div>
       <div class="list-actions">
         ${
-          !item.trashed
+          !item.trashed && isOwner
             ? `<button class="icon-btn btn-star" data-id="${item.id}" title="Destacar">${
                 item.starred ? "⭐" : "☆"
               }</button>
@@ -599,8 +751,8 @@ function renderSharesSection(container) {
     container.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">🔗</div>
-        <h3>No tienes enlaces compartidos activos</h3>
-        <p>Haz clic en el botón 🔗 de cualquier archivo o carpeta para generar un enlace público.</p>
+        <h3>No tienes enlaces públicos activos</h3>
+        <p>Haz clic en el botón 🔗 de cualquier archivo o carpeta para compartirlo con otro usuario o crear un enlace público.</p>
       </div>
     `;
     return;
@@ -643,7 +795,7 @@ function renderSharesSection(container) {
 
   container.querySelectorAll(".btn-revoke-token").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      await fetch(`/api/shares/${btn.dataset.token}`, { method: "DELETE" });
+      await apiFetch(`/api/shares/${btn.dataset.token}`, { method: "DELETE" });
       showToast("Enlace compartido revocado", "🗑️");
       fetchCloudData();
     });
@@ -653,7 +805,7 @@ function renderSharesSection(container) {
 function attachItemEvents(container) {
   container.querySelectorAll(".item-card, .list-row").forEach((el) => {
     const id = el.dataset.id;
-    const item = state.items.find((i) => i.id === id);
+    const item = findItemAnywhere(id);
     if (!item) return;
 
     el.addEventListener("click", (e) => {
@@ -666,8 +818,7 @@ function attachItemEvents(container) {
       openContextMenu(e.clientX, e.clientY, item);
     });
 
-    // Drag & Drop interno para mover archivos dentro de una carpeta
-    if (!item.trashed) {
+    if (!item.trashed && item.myPermission === "owner") {
       el.addEventListener("dragstart", (e) => {
         e.dataTransfer.setData("text/nimbus-item-id", item.id);
       });
@@ -698,7 +849,7 @@ function attachItemEvents(container) {
   container.querySelectorAll(".btn-star").forEach((btn) => {
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
-      const item = state.items.find((i) => i.id === btn.dataset.id);
+      const item = findItemAnywhere(btn.dataset.id);
       if (!item) return;
       await updateItem(item.id, { starred: !item.starred });
       showToast(item.starred ? "Quitado de destacados" : "Añadido a destacados", "⭐");
@@ -708,7 +859,7 @@ function attachItemEvents(container) {
   container.querySelectorAll(".btn-share-item").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const item = state.items.find((i) => i.id === btn.dataset.id);
+      const item = findItemAnywhere(btn.dataset.id);
       if (item) openShareModal(item);
     });
   });
@@ -716,7 +867,7 @@ function attachItemEvents(container) {
   container.querySelectorAll(".btn-more-item").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const item = state.items.find((i) => i.id === btn.dataset.id);
+      const item = findItemAnywhere(btn.dataset.id);
       const rect = btn.getBoundingClientRect();
       if (item) openContextMenu(rect.left - 140, rect.bottom + 6, item);
     });
@@ -746,7 +897,8 @@ function handleItemPrimaryAction(item) {
 
 async function openPreviewModal(item, initialMode = "read") {
   state.activePreviewItem = item;
-  state.activePreviewMode = initialMode;
+  const canEdit = item.myPermission === "owner" || item.myPermission === "edit";
+  state.activePreviewMode = canEdit ? initialMode : "read";
   state.imgZoom = 1;
   state.imgRotation = 0;
 
@@ -757,16 +909,20 @@ async function openPreviewModal(item, initialMode = "read") {
   document.getElementById("preview-file-name").textContent = item.name;
   document.getElementById("preview-file-meta").textContent = `${formatBytes(
     item.size
-  )} · Modificado: ${formatDate(item.updatedAt)}`;
+  )} · Modificado: ${formatDate(item.updatedAt)}${
+    item.myPermission !== "owner" ? ` · Compartido por @${item.ownerUsername}` : ""
+  }`;
 
   const modeTabs = document.getElementById("preview-mode-tabs");
   const imgControls = document.getElementById("preview-image-controls");
   const saveBtn = document.getElementById("preview-save-btn");
+  const shareBtn = document.getElementById("preview-share-btn");
   const mdToolbar = document.getElementById("md-toolbar");
 
-  modeTabs.classList.toggle("hidden", !(cat === "md" || cat === "code" || cat === "csv"));
+  modeTabs.classList.toggle("hidden", !((cat === "md" || cat === "code" || cat === "csv") && canEdit));
   imgControls.classList.toggle("hidden", cat !== "image");
   saveBtn.classList.add("hidden");
+  shareBtn.classList.toggle("hidden", item.myPermission !== "owner");
   mdToolbar.classList.add("hidden");
 
   modal.classList.remove("hidden");
@@ -774,8 +930,11 @@ async function openPreviewModal(item, initialMode = "read") {
   const body = document.getElementById("preview-body");
   body.innerHTML = `<div class="preview-stage-center"><p class="preview-meta">Cargando vista previa...</p></div>`;
 
+  const previewUrl = withAuthUrl(`/api/files/${item.id}/preview`);
+  const downloadUrl = withAuthUrl(`/api/files/${item.id}/download`);
+
   if (cat === "md" || cat === "code" || cat === "csv") {
-    const res = await fetch(`/api/files/${item.id}/content`);
+    const res = await apiFetch(`/api/files/${item.id}/content`);
     const data = await res.json();
     state.activeEditorContent = data.content || "";
     renderTextOrMarkdownWorkspace();
@@ -785,7 +944,7 @@ async function openPreviewModal(item, initialMode = "read") {
   if (cat === "image") {
     body.innerHTML = `
       <div class="preview-stage-center">
-        <img id="preview-stage-img" src="/api/files/${item.id}/preview?t=${Date.now()}" alt="${escapeHtml(item.name)}" />
+        <img id="preview-stage-img" src="${previewUrl}&t=${Date.now()}" alt="${escapeHtml(item.name)}" />
       </div>
     `;
     updateImageTransform();
@@ -795,7 +954,7 @@ async function openPreviewModal(item, initialMode = "read") {
   if (cat === "video") {
     body.innerHTML = `
       <div class="preview-stage-center">
-        <video controls autoplay src="/api/files/${item.id}/preview"></video>
+        <video controls autoplay src="${previewUrl}"></video>
       </div>
     `;
     return;
@@ -808,7 +967,7 @@ async function openPreviewModal(item, initialMode = "read") {
           <div style="font-size:3.8rem;margin-bottom:14px;">🎵</div>
           <h3 style="margin-bottom:6px;">${escapeHtml(item.name)}</h3>
           <p class="preview-meta" style="margin-bottom:20px;">${formatBytes(item.size)}</p>
-          <audio controls autoplay src="/api/files/${item.id}/preview" style="width:100%"></audio>
+          <audio controls autoplay src="${previewUrl}" style="width:100%"></audio>
         </div>
       </div>
     `;
@@ -816,11 +975,10 @@ async function openPreviewModal(item, initialMode = "read") {
   }
 
   if (cat === "pdf") {
-    body.innerHTML = `<iframe class="pdf-frame" src="/api/files/${item.id}/preview"></iframe>`;
+    body.innerHTML = `<iframe class="pdf-frame" src="${previewUrl}"></iframe>`;
     return;
   }
 
-  // Otros tipos de archivo
   body.innerHTML = `
     <div class="preview-stage-center">
       <div class="audio-player-card">
@@ -829,7 +987,7 @@ async function openPreviewModal(item, initialMode = "read") {
         <p class="preview-meta" style="margin-bottom:20px;">Tipo: ${escapeHtml(
           item.mimeType || "Archivo binario"
         )} · ${formatBytes(item.size)}</p>
-        <a href="/api/files/${item.id}/download" class="btn btn-primary">⬇️ Descargar Archivo</a>
+        <a href="${downloadUrl}" class="btn btn-primary">⬇️ Descargar Archivo</a>
       </div>
     </div>
   `;
@@ -935,21 +1093,22 @@ function updateMarkdownCounters(text = "") {
 async function saveActiveFileContent() {
   const item = state.activePreviewItem;
   if (!item) return;
-  const res = await fetch(`/api/files/${item.id}/content`, {
+  const res = await apiFetch(`/api/files/${item.id}/content`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content: state.activeEditorContent }),
   });
   if (res.ok) {
     const data = await res.json();
-    state.activePreviewItem = data.item;
+    state.activePreviewItem = { ...item, ...data.item };
     document.getElementById("preview-file-meta").textContent = `${formatBytes(
       data.item.size
     )} · Guardado: ${formatDate(data.item.updatedAt)}`;
     showToast("Cambios guardados en la nube", "💾");
     fetchCloudData();
   } else {
-    showToast("No se pudo guardar el archivo", "⚠️");
+    const err = await res.json().catch(() => ({}));
+    showToast(err.error || "No se pudo guardar el archivo", "⚠️");
   }
 }
 
@@ -998,7 +1157,6 @@ function updateImageTransform() {
 function enhanceSelectElement(selectEl) {
   if (!selectEl) return;
 
-  // Si ya fue mejorado previamente, reconstruir sus opciones
   let wrapper = selectEl.closest(".custom-select-wrapper");
   if (!wrapper) {
     wrapper = document.createElement("div");
@@ -1078,7 +1236,6 @@ async function readDirectoryEntriesRecursive(dirEntry, basePath = "") {
   const reader = dirEntry.createReader();
   const allEntries = [];
 
-  // readEntries devuelve lotes; debemos llamar hasta que devuelva un arreglo vacío
   while (true) {
     const batch = await new Promise((resolve, reject) => {
       reader.readEntries(resolve, reject);
@@ -1143,7 +1300,6 @@ async function extractDroppedItems(dataTransfer) {
     }
   }
 
-  // Fallback para navegadores sin webkitGetAsEntry
   if (dataTransfer.files && dataTransfer.files.length > 0) {
     for (const file of dataTransfer.files) {
       filesWithPaths.push({
@@ -1182,7 +1338,7 @@ async function uploadFilesAndFolders(filesWithPaths = [], emptyFolders = []) {
   );
 
   try {
-    const res = await fetch("/api/upload", {
+    const res = await apiFetch("/api/upload", {
       method: "POST",
       body: formData,
     });
@@ -1218,7 +1374,7 @@ async function uploadFilesList(fileList) {
 // ============================================================================
 
 async function updateItem(itemId, patchData) {
-  const res = await fetch(`/api/items/${itemId}`, {
+  const res = await apiFetch(`/api/items/${itemId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patchData),
@@ -1238,7 +1394,6 @@ function openDialogModal({ title, contentHtml, confirmText = "Guardar", onConfir
   document.getElementById("dialog-confirm").textContent = confirmText;
   modal.classList.remove("hidden");
 
-  // Mejorar cualquier <select> dentro del diálogo
   modal.querySelectorAll("select").forEach((sel) => enhanceSelectElement(sel));
 
   const firstInput = modal.querySelector("input, .custom-select-trigger");
@@ -1265,7 +1420,7 @@ function promptNewFolder() {
     onConfirm: async () => {
       const name = document.getElementById("input-folder-name").value.trim();
       if (!name) return;
-      await fetch("/api/folders", {
+      await apiFetch("/api/folders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, parentId: state.currentFolderId }),
@@ -1292,7 +1447,7 @@ function promptNewMarkdownDoc() {
       if (!name.toLowerCase().endsWith(".md")) name += ".md";
       const titleClean = name.replace(/\.md$/i, "");
       const initialMd = `# ${titleClean}\n\nEscribe aquí tus notas en formato **Markdown**...\n\n- [ ] Primera tarea\n- [ ] Segunda tarea\n`;
-      const res = await fetch("/api/files/text", {
+      const res = await apiFetch("/api/files/text", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1304,7 +1459,7 @@ function promptNewMarkdownDoc() {
       if (res.ok) {
         const data = await res.json();
         await fetchCloudData();
-        openPreviewModal(data.item, "split");
+        openPreviewModal({ ...data.item, myPermission: "owner" }, "split");
       }
     },
   });
@@ -1362,12 +1517,14 @@ function promptMoveItem(item) {
 }
 
 // ============================================================================
-// MENÚ CONTEXTUAL (CLIC DERECHO) Y MODAL DE COMPARTIR
+// MENÚ CONTEXTUAL (CLIC DERECHO) Y MODAL DE COMPARTIR (USUARIOS + PÚBLICO)
 // ============================================================================
 
 function openContextMenu(x, y, item) {
   const menu = document.getElementById("context-menu");
   const cat = getFileCategory(item);
+  const isOwner = item.myPermission === "owner";
+  const canEdit = isOwner || item.myPermission === "edit";
 
   if (item.trashed) {
     menu.innerHTML = `
@@ -1381,27 +1538,35 @@ function openContextMenu(x, y, item) {
         item.type === "folder" ? "📂 Abrir carpeta" : "👁️ Vista previa"
       }</button>
       ${
-        cat === "md" || cat === "code"
+        (cat === "md" || cat === "code") && canEdit
           ? `<button class="ctx-item" data-action="edit-live">⚡ Editar en Vista Dividida</button>`
           : ""
       }
-      <button class="ctx-item" data-action="share">🔗 Compartir enlace...</button>
-      <button class="ctx-item" data-action="star">${
-        item.starred ? "☆ Quitar de destacados" : "⭐ Añadir a destacados"
-      }</button>
+      ${
+        isOwner
+          ? `<button class="ctx-item" data-action="share">🔗 Compartir (Usuarios / Enlace)...</button>
+             <button class="ctx-item" data-action="star">${
+               item.starred ? "☆ Quitar de destacados" : "⭐ Añadir a destacados"
+             }</button>`
+          : ""
+      }
       <div class="ctx-sep"></div>
-      <button class="ctx-item" data-action="rename">✏️ Renombrar</button>
-      <button class="ctx-item" data-action="move">📂 Mover a otra carpeta...</button>
+      ${canEdit ? `<button class="ctx-item" data-action="rename">✏️ Renombrar</button>` : ""}
+      ${isOwner ? `<button class="ctx-item" data-action="move">📂 Mover a otra carpeta...</button>` : ""}
       <button class="ctx-item" data-action="download">${
         item.type === "folder" ? "📦 Descargar como .ZIP" : "⬇️ Descargar archivo"
       }</button>
-      <div class="ctx-sep"></div>
-      <button class="ctx-item danger" data-action="trash">🗑️ Enviar a la papelera</button>
+      ${
+        isOwner
+          ? `<div class="ctx-sep"></div>
+             <button class="ctx-item danger" data-action="trash">🗑️ Enviar a la papelera</button>`
+          : ""
+      }
     `;
   }
 
   menu.classList.remove("hidden");
-  const maxX = window.innerWidth - 220;
+  const maxX = window.innerWidth - 225;
   const maxY = window.innerHeight - 280;
   menu.style.left = `${Math.max(10, Math.min(x, maxX))}px`;
   menu.style.top = `${Math.max(10, Math.min(y, maxY))}px`;
@@ -1417,10 +1582,11 @@ function openContextMenu(x, y, item) {
       if (act === "rename") promptRenameItem(item);
       if (act === "move") promptMoveItem(item);
       if (act === "download") {
-        window.location.href =
+        window.location.href = withAuthUrl(
           item.type === "folder"
             ? `/api/folders/${item.id}/zip`
-            : `/api/files/${item.id}/download`;
+            : `/api/files/${item.id}/download`
+        );
       }
       if (act === "trash") {
         await updateItem(item.id, { trashed: true });
@@ -1431,7 +1597,7 @@ function openContextMenu(x, y, item) {
         showToast(`"${item.name}" restaurado`, "♻️");
       }
       if (act === "delete-perm") {
-        await fetch(`/api/items/${item.id}`, { method: "DELETE" });
+        await apiFetch(`/api/items/${item.id}`, { method: "DELETE" });
         showToast("Eliminado permanentemente", "🔥");
         fetchCloudData();
       }
@@ -1444,22 +1610,67 @@ function openShareModal(item) {
   document.getElementById("share-modal-subtitle").textContent = `${getFileIcon(item)} ${
     item.name
   } (${formatBytes(item.size)})`;
+
+  // Poblar selector de otros usuarios registrados
+  const otherUsers = state.users.filter((u) => !state.currentUser || u.id !== state.currentUser.id);
+  const userSelect = document.getElementById("share-target-user");
+  if (otherUsers.length === 0) {
+    userSelect.innerHTML = `<option value="">No hay otros usuarios registrados aún</option>`;
+  } else {
+    userSelect.innerHTML = otherUsers
+      .map((u) => `<option value="${u.id}">👤 ${escapeHtml(u.displayName)} (@${escapeHtml(u.username)})</option>`)
+      .join("");
+  }
+  enhanceSelectElement(userSelect);
+
+  const permSelect = document.getElementById("share-target-perm");
+  permSelect.value = "view";
+  enhanceSelectElement(permSelect);
+
   document.getElementById("share-password").value = "";
   const expirySelect = document.getElementById("share-expiry");
   expirySelect.value = "0";
   enhanceSelectElement(expirySelect);
   document.getElementById("share-generated-box").classList.add("hidden");
 
+  renderSharedUsersForItem(item);
   renderItemExistingShares(item.id);
   modal.classList.remove("hidden");
 
+  // Formulario para compartir con usuario de la nube
+  const shareUserForm = document.getElementById("share-user-form");
+  shareUserForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const targetUserId = userSelect.value;
+    const permission = permSelect.value;
+    if (!targetUserId) {
+      showToast("Crea otra cuenta de usuario para compartir con ella", "ℹ️");
+      return;
+    }
+    const res = await apiFetch(`/api/items/${item.id}/share-user`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetUserId, permission }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      await fetchCloudData();
+      renderSharedUsersForItem(data.item);
+      showToast("Acceso concedido al usuario", "🤝");
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(err.error || "Error al compartir con usuario", "⚠️");
+    }
+  };
+
+  // Formulario para generar enlace público
   const form = document.getElementById("create-share-form");
   form.onsubmit = async (e) => {
     e.preventDefault();
     const password = document.getElementById("share-password").value;
     const expiresInHours = Number(document.getElementById("share-expiry").value);
 
-    const res = await fetch("/api/shares", {
+    const res = await apiFetch("/api/shares", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ itemId: item.id, password, expiresInHours }),
@@ -1477,12 +1688,58 @@ function openShareModal(item) {
   };
 }
 
+function renderSharedUsersForItem(item) {
+  const listEl = document.getElementById("shared-users-list");
+  const currentItem = state.items.find((i) => i.id === item.id) || item;
+  const sharedList = currentItem.sharedWith || [];
+
+  if (sharedList.length === 0) {
+    listEl.innerHTML = `<p class="preview-meta">Este elemento es privado (no compartido con otros usuarios aún).</p>`;
+    return;
+  }
+
+  listEl.innerHTML = sharedList
+    .map(
+      (entry) => `
+        <div class="share-list-item">
+          <div>
+            <strong>👤 ${escapeHtml(entry.displayName || entry.username)}</strong> (@${escapeHtml(
+        entry.username
+      )})
+            <div class="preview-meta">${
+              entry.permission === "edit" ? "✏️ Permiso de Edición" : "👁️ Solo lectura"
+            }</div>
+          </div>
+          <button type="button" class="btn btn-danger btn-sm btn-revoke-user" data-uid="${
+            entry.userId
+          }">Quitar</button>
+        </div>
+      `
+    )
+    .join("");
+
+  listEl.querySelectorAll(".btn-revoke-user").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const uid = btn.dataset.uid;
+      const res = await apiFetch(`/api/items/${currentItem.id}/share-user/${uid}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        await fetchCloudData();
+        renderSharedUsersForItem(data.item);
+        showToast("Acceso de usuario revocado", "🗑️");
+      }
+    });
+  });
+}
+
 function renderItemExistingShares(itemId) {
   const listEl = document.getElementById("item-shares-list");
   const itemShares = state.shares.filter((s) => s.itemId === itemId);
 
   if (itemShares.length === 0) {
-    listEl.innerHTML = `<p class="preview-meta">Aún no hay enlaces activos para este elemento.</p>`;
+    listEl.innerHTML = `<p class="preview-meta">Sin enlaces públicos activos para este elemento.</p>`;
     return;
   }
 
@@ -1517,7 +1774,7 @@ function renderItemExistingShares(itemId) {
 
   listEl.querySelectorAll(".btn-del-s").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      await fetch(`/api/shares/${btn.dataset.token}`, { method: "DELETE" });
+      await apiFetch(`/api/shares/${btn.dataset.token}`, { method: "DELETE" });
       await fetchCloudData();
       renderItemExistingShares(itemId);
       showToast("Enlace eliminado", "🗑️");
@@ -1531,6 +1788,7 @@ function renderItemExistingShares(itemId) {
 
 async function initPublicSharePortal(token, password = "") {
   document.getElementById("main-cloud-app").classList.add("hidden");
+  document.getElementById("auth-screen").classList.add("hidden");
   const appEl = document.getElementById("public-share-App");
   appEl.classList.remove("hidden");
 
@@ -1556,7 +1814,11 @@ async function initPublicSharePortal(token, password = "") {
           <div class="form-group">
             <input type="password" id="public-pwd-input" placeholder="Contraseña..." required autofocus />
           </div>
-          ${password ? `<p style="color:var(--danger);font-size:0.82rem;margin-bottom:10px;">Contraseña incorrecta, inténtalo de nuevo.</p>` : ""}
+          ${
+            password
+              ? `<p style="color:var(--danger);font-size:0.82rem;margin-bottom:10px;">Contraseña incorrecta, inténtalo de nuevo.</p>`
+              : ""
+          }
           <button type="submit" class="btn btn-primary btn-block">Desbloquear Contenido</button>
         </form>
       </div>
@@ -1669,11 +1931,102 @@ function applyTheme(theme) {
   localStorage.setItem("nimbus_theme", theme);
 }
 
+function setupAuthEvents() {
+  const tabs = document.querySelectorAll(".auth-tab");
+  const loginForm = document.getElementById("login-form");
+  const registerForm = document.getElementById("register-form");
+  const loginError = document.getElementById("login-error");
+  const registerError = document.getElementById("register-error");
+
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      tabs.forEach((t) => t.classList.remove("active"));
+      tab.classList.add("active");
+      const isLogin = tab.dataset.tab === "login";
+      loginForm.classList.toggle("hidden", !isLogin);
+      registerForm.classList.toggle("hidden", isLogin);
+      loginError.classList.add("hidden");
+      registerError.classList.add("hidden");
+    });
+  });
+
+  async function performLogin(username, password) {
+    loginError.classList.add("hidden");
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      loginError.textContent = data.error || "Error al iniciar sesión";
+      loginError.classList.remove("hidden");
+      return;
+    }
+    state.authToken = data.token;
+    state.currentUser = data.user;
+    localStorage.setItem("nimbus_token", data.token);
+    showToast(`¡Bienvenido, ${data.user.displayName}!`, "👋");
+    enterAuthenticatedApp();
+  }
+
+  loginForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const u = document.getElementById("login-username").value.trim();
+    const p = document.getElementById("login-password").value;
+    await performLogin(u, p);
+  });
+
+  document.getElementById("btn-demo-admin").addEventListener("click", () => {
+    performLogin("admin", "admin123");
+  });
+
+  document.getElementById("btn-demo-guest").addEventListener("click", () => {
+    performLogin("invitado", "123456");
+  });
+
+  registerForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    registerError.classList.add("hidden");
+    const displayName = document.getElementById("reg-displayname").value.trim();
+    const username = document.getElementById("reg-username").value.trim();
+    const password = document.getElementById("reg-password").value;
+
+    const res = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName, username, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      registerError.textContent = data.error || "No se pudo crear la cuenta";
+      registerError.classList.remove("hidden");
+      return;
+    }
+    state.authToken = data.token;
+    state.currentUser = data.user;
+    localStorage.setItem("nimbus_token", data.token);
+    showToast(`Cuenta @${data.user.username} creada con éxito`, "🎉");
+    enterAuthenticatedApp();
+  });
+
+  document.getElementById("btn-logout").addEventListener("click", async () => {
+    await apiFetch("/api/auth/logout", { method: "POST" });
+    state.authToken = "";
+    state.currentUser = null;
+    state.currentFolderId = null;
+    localStorage.removeItem("nimbus_token");
+    showToast("Sesión cerrada", "🚪");
+    showAuthScreen();
+  });
+
+  document.getElementById("btn-users-directory").addEventListener("click", openUsersDirectoryModal);
+}
+
 function initApp() {
   applyTheme(state.theme);
-
-  // Mejorar todos los elementos <select> con el componente Custom Select
   enhanceAllSelects();
+  setupAuthEvents();
 
   // Detectar si estamos visitando un enlace compartido (?share=TOKEN)
   const params = new URLSearchParams(window.location.search);
@@ -1724,7 +2077,7 @@ function initApp() {
   // Descargar carpeta actual en ZIP
   document.getElementById("btn-download-current-folder").addEventListener("click", () => {
     if (state.currentFolderId) {
-      window.location.href = `/api/folders/${state.currentFolderId}/zip`;
+      window.location.href = withAuthUrl(`/api/folders/${state.currentFolderId}/zip`);
     }
   });
 
@@ -1733,9 +2086,9 @@ function initApp() {
     openDialogModal({
       title: "🗑️ Vaciar Papelera",
       confirmText: "Eliminar Todo Definitivamente",
-      contentHtml: `<p class="preview-meta">¿Estás seguro de que deseas eliminar permanentemente todos los archivos de la papelera? Esta acción no se puede deshacer.</p>`,
+      contentHtml: `<p class="preview-meta">¿Estás seguro de que deseas eliminar permanentemente todos los archivos de tu papelera? Esta acción no se puede deshacer.</p>`,
       onConfirm: async () => {
-        await fetch("/api/trash/empty", { method: "POST" });
+        await apiFetch("/api/trash/empty", { method: "POST" });
         showToast("Papelera vaciada por completo", "🗑️");
         fetchCloudData();
       },
@@ -1817,7 +2170,7 @@ function initApp() {
   });
   document.getElementById("preview-download-btn").addEventListener("click", () => {
     if (state.activePreviewItem) {
-      window.location.href = `/api/files/${state.activePreviewItem.id}/download`;
+      window.location.href = withAuthUrl(`/api/files/${state.activePreviewItem.id}/download`);
     }
   });
   document.getElementById("preview-close-btn").addEventListener("click", () => {
@@ -1867,7 +2220,7 @@ function initApp() {
     document.querySelectorAll(".custom-select-wrapper.open").forEach((w) => w.classList.remove("open"));
   });
 
-  // Atajos de teclado (Ctrl+K buscar, Ctrl+S guardar en editor .md, Esc cerrar modal)
+  // Atajos de teclado
   window.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
       e.preventDefault();
@@ -1896,6 +2249,7 @@ function initApp() {
 
   window.addEventListener("dragenter", (e) => {
     if (
+      state.currentUser &&
       e.dataTransfer &&
       e.dataTransfer.types.includes("Files") &&
       !e.dataTransfer.types.includes("text/nimbus-item-id")
@@ -1908,6 +2262,7 @@ function initApp() {
 
   window.addEventListener("dragover", (e) => {
     if (
+      state.currentUser &&
       e.dataTransfer &&
       e.dataTransfer.types.includes("Files") &&
       !e.dataTransfer.types.includes("text/nimbus-item-id")
@@ -1918,6 +2273,7 @@ function initApp() {
 
   window.addEventListener("dragleave", (e) => {
     if (
+      state.currentUser &&
       e.dataTransfer &&
       e.dataTransfer.types.includes("Files") &&
       !e.dataTransfer.types.includes("text/nimbus-item-id")
@@ -1932,6 +2288,7 @@ function initApp() {
 
   window.addEventListener("drop", async (e) => {
     if (
+      state.currentUser &&
       e.dataTransfer &&
       e.dataTransfer.types.includes("Files") &&
       !e.dataTransfer.types.includes("text/nimbus-item-id")
@@ -1944,8 +2301,8 @@ function initApp() {
     }
   });
 
-  // Cargar datos iniciales de la nube
-  fetchCloudData();
+  // Verificar sesión activa o mostrar pantalla de Login
+  checkSessionAndStart();
 }
 
 document.addEventListener("DOMContentLoaded", initApp);

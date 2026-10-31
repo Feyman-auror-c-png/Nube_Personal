@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Servidor Local para Nube Personal (Nimbus Cloud)
-Compatible con el mismo almacenamiento en disco (./storage) y API REST que server.js
+Servidor Local Multiusuario para Nube Personal (Nimbus Cloud v1.2.0)
+Incluye: Autenticación (Login/Registro), Espacio privado por usuario,
+Compartir interno entre usuarios (Solo lectura / Edición) y Enlaces públicos (?share=TOKEN).
 """
 
 import os
@@ -28,7 +29,8 @@ FILES_DIR = os.path.join(STORAGE_DIR, "files")
 META_PATH = os.path.join(STORAGE_DIR, "metadata.json")
 PORT = int(os.environ.get("PORT", 3000))
 
-# Asegurar tipos MIME comunes
+AVATAR_COLORS = ["#38bdf8", "#6366f1", "#10b981", "#f59e0b", "#ec4899", "#8b5cf6", "#14b8a6"]
+
 mimetypes.add_type("text/markdown", ".md")
 mimetypes.add_type("text/markdown", ".markdown")
 mimetypes.add_type("application/javascript", ".js")
@@ -53,6 +55,69 @@ def ensure_storage():
     os.makedirs(FILES_DIR, exist_ok=True)
     if not os.path.exists(META_PATH):
         seed_initial_data()
+    else:
+        migrate_multiuser_if_needed()
+
+
+def migrate_multiuser_if_needed():
+    """Garantiza que metadata.json tenga usuarios por defecto y que los archivos previos pertenezcan a admin."""
+    try:
+        with open(META_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        seed_initial_data()
+        return
+
+    changed = False
+    if "users" not in data or not data["users"]:
+        created = now_iso()
+        admin_id = str(uuid.uuid4())
+        guest_id = str(uuid.uuid4())
+        data["users"] = [
+            {
+                "id": admin_id,
+                "username": "admin",
+                "displayName": "Administrador Principal",
+                "passwordHash": hash_password("admin123"),
+                "role": "admin",
+                "avatarColor": "#38bdf8",
+                "quotaBytes": 5 * 1024 * 1024 * 1024,
+                "createdAt": created,
+            },
+            {
+                "id": guest_id,
+                "username": "invitado",
+                "displayName": "Usuario Invitado",
+                "passwordHash": hash_password("123456"),
+                "role": "user",
+                "avatarColor": "#10b981",
+                "quotaBytes": 2 * 1024 * 1024 * 1024,
+                "createdAt": created,
+            },
+        ]
+        changed = True
+
+    admin_user_id = data["users"][0]["id"]
+
+    if "sessions" not in data:
+        data["sessions"] = {}
+        changed = True
+
+    for it in data.get("items", []):
+        if not it.get("ownerId"):
+            it["ownerId"] = admin_user_id
+            changed = True
+        if "sharedWith" not in it:
+            it["sharedWith"] = []
+            changed = True
+
+    for s in data.get("shares", []):
+        if not s.get("ownerId"):
+            s["ownerId"] = admin_user_id
+            changed = True
+
+    if changed:
+        save_meta(data)
 
 
 def load_meta():
@@ -64,15 +129,13 @@ def load_meta():
                 data["items"] = []
             if "shares" not in data:
                 data["shares"] = []
-            if "settings" not in data:
-                data["settings"] = {"quotaBytes": 5 * 1024 * 1024 * 1024, "pinHash": ""}
+            if "users" not in data:
+                data["users"] = []
+            if "sessions" not in data:
+                data["sessions"] = {}
             return data
     except Exception:
-        return {
-            "items": [],
-            "shares": [],
-            "settings": {"quotaBytes": 5 * 1024 * 1024 * 1024, "pinHash": ""},
-        }
+        return {"items": [], "shares": [], "users": [], "sessions": {}}
 
 
 def save_meta(data):
@@ -83,251 +146,78 @@ def save_meta(data):
     os.replace(temp_path, META_PATH)
 
 
-def seed_initial_data():
-    """Crea carpetas y archivos de demostración en el primer inicio."""
-    os.makedirs(FILES_DIR, exist_ok=True)
+def seed_user_welcome_files(meta, user_id, display_name):
+    """Crea una nota de bienvenida en el espacio personal de un nuevo usuario registrado."""
     created = now_iso()
+    welcome_id = str(uuid.uuid4())
+    disk_name = f"{welcome_id}.md"
+    content = f"""# 👋 ¡Hola, {display_name}! Bienvenido a tu espacio en Nimbus Cloud
 
-    folder_docs_id = str(uuid.uuid4())
-    folder_proj_id = str(uuid.uuid4())
+Este es tu **espacio personal privado** en la nube.
 
-    welcome_md_id = str(uuid.uuid4())
-    welcome_md_disk = f"{welcome_md_id}.md"
-    welcome_content = """# ☁️ ¡Bienvenido a tu Nube Personal (Nimbus Cloud)!
-
-Esta es tu **nube personal local**, diseñada para gestionar tus archivos, carpetas, código, multimedia y documentos **Markdown (`.md`)** con vista previa instantánea y edición en vivo.
-
----
-
-## ✨ Características Principales
-
-- 📁 **Gestión de Carpetas**: Crea carpetas anidadas, mueve archivos entre ellas, renombra o descarga carpetas enteras en `.zip`.
-- 📝 **Estudio Markdown (`.md`) en Vivo**:
-  - Visualización limpia con soporte para **tablas**, **listas de tareas**, **bloques de código** con resaltado de sintaxis y citas.
-  - **Editor en vista dividida**: Edita tus archivos `.md` y mira los cambios en tiempo real. Presiona `Ctrl + S` o el botón **Guardar** para actualizar el archivo directamente en el servidor.
-- 🖼️ **Vista Previa Multimedia y de Código**:
-  - **Imágenes** (`.png`, `.jpg`, `.svg`, `.webp`, `.gif`) con zoom y rotación.
-  - **Video y Audio** (`.mp4`, `.webm`, `.mp3`, `.wav`) con reproductor integrado y soporte de streaming.
-  - **Documentos PDF** y tablas **CSV** interactivas.
-  - **Archivos de código** (`.js`, `.py`, `.html`, `.css`, `.json`) con resaltado de sintaxis y edición directa.
-- 🔗 **Enlaces para Compartir**:
-  - Genera enlaces públicos para cualquier archivo o carpeta.
-  - Configura **contraseña opcional** y **fecha de expiración**.
-
----
-
-## 📊 Ejemplo de Tabla Markdown
-
-| Función | Estado | Atajo / Acción |
-| :--- | :---: | :--- |
-| Subir archivos | ✅ Activo | Arrastrar y soltar (Drag & Drop) |
-| Buscar archivos | ✅ Activo | `Ctrl + K` en la barra superior |
-| Editar Markdown | ✅ Activo | Clic en archivo `.md` → **Vista Dividida** |
-| Compartir con clave | ✅ Activo | Menú del archivo → **Compartir** |
-| Descargar carpeta ZIP | ✅ Activo | Menú de carpeta → **Descargar ZIP** |
-
----
-
-## 💻 Ejemplo de Código con Resaltado
-
-```javascript
-// Ejemplo rápido de uso de la API de tu Nube Personal
-async function obtenerArchivos(parentId = null) {
-  const res = await fetch(`/api/items?parentId=${parentId || ''}`);
-  const data = await res.json();
-  console.log(`Archivos cargados: ${data.items.length}`);
-  return data.items;
-}
-```
-
-> 💡 **Tip:** Prueba cambiar a **Vista Dividida** arriba a la derecha en esta ventana para editar este documento en tiempo real.
+## ✨ ¿Qué puedes hacer aquí?
+- 📁 **Subir archivos y carpetas completas**: Arrastra carpetas desde tu PC o usa el botón **📁⬆️ Subir Carpeta**.
+- 📝 **Crear y editar notas `.md` en vivo**: Usa el modo **⚡ Vista Dividida** para editar con vista previa instantánea.
+- 👥 **Compartir con otros usuarios**: Haz clic en **🔗 Compartir** sobre cualquier archivo o carpeta para darle acceso de **Solo lectura** o **Edición** a otro usuario de la nube, o crear un enlace público.
 """
-    with open(os.path.join(FILES_DIR, welcome_md_disk), "w", encoding="utf-8") as f:
-        f.write(welcome_content)
+    encoded = content.encode("utf-8")
+    with open(os.path.join(FILES_DIR, disk_name), "wb") as f:
+        f.write(encoded)
 
-    notes_md_id = str(uuid.uuid4())
-    notes_md_disk = f"{notes_md_id}.md"
-    notes_content = """# 📋 Notas del Proyecto y Tareas
-
-Aquí puedes organizar tus ideas y apuntes dentro de la carpeta **Documentos**.
-
-## Lista de Pendientes
-- [x] Configurar servidor local de la nube personal
-- [x] Probar el visualizador y editor de archivos `.md`
-- [ ] Subir mis primeros archivos arrastrándolos a la pantalla
-- [ ] Crear un enlace compartido de prueba
-
-## Comandos Útiles
-```bash
-# Iniciar con Python (sin dependencias externas)
-python server.py
-
-# O iniciar con Node.js + Express
-npm install && npm start
-```
-"""
-    with open(os.path.join(FILES_DIR, notes_md_disk), "w", encoding="utf-8") as f:
-        f.write(notes_content)
-
-    code_id = str(uuid.uuid4())
-    code_disk = f"{code_id}.js"
-    code_content = """/**
- * Script de demostración en la carpeta Proyectos
- * Puedes previsualizar y editar este código directamente desde la nube.
- */
-
-const configuracionNube = {
-  nombre: "Nimbus Personal Cloud",
-  version: "1.0.0",
-  formatosSoportados: ["md", "png", "jpg", "svg", "mp4", "mp3", "pdf", "csv", "js", "py", "json"],
-  almacenamientoLocal: true,
-};
-
-function saludarUsuario(usuario = "Creador") {
-  return `¡Hola, ${usuario}! Tu nube personal está funcionando al 100%.`;
-}
-
-console.log(saludarUsuario());
-"""
-    with open(os.path.join(FILES_DIR, code_disk), "w", encoding="utf-8") as f:
-        f.write(code_content)
-
-    csv_id = str(uuid.uuid4())
-    csv_disk = f"{csv_id}.csv"
-    csv_content = """Proyecto,Categoria,Estado,Prioridad,Progreso
-Nube Personal Web,Full-Stack,Completado,Alta,100%
-Visualizador Markdown,Frontend,Completado,Alta,100%
-Enlaces Compartidos,Seguridad,Activo,Media,95%
-App Movil Futura,Ideas,Planificado,Baja,20%
-"""
-    with open(os.path.join(FILES_DIR, csv_disk), "w", encoding="utf-8") as f:
-        f.write(csv_content)
-
-    svg_id = str(uuid.uuid4())
-    svg_disk = f"{svg_id}.svg"
-    svg_content = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 360" width="600" height="360">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0f172a"/>
-      <stop offset="50%" stop-color="#1e1b4b"/>
-      <stop offset="100%" stop-color="#0f172a"/>
-    </linearGradient>
-    <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38bdf8"/>
-      <stop offset="100%" stop-color="#6366f1"/>
-    </linearGradient>
-  </defs>
-  <rect width="600" height="360" rx="24" fill="url(#bg)"/>
-  <circle cx="480" cy="80" r="90" fill="#6366f1" opacity="0.15"/>
-  <circle cx="120" cy="280" r="110" fill="#38bdf8" opacity="0.12"/>
-  <path d="M210 215 H395 A45 45 0 0 0 405 127 A65 65 0 0 0 280 105 A55 55 0 0 0 185 150 A40 40 0 0 0 210 215 Z" fill="url(#cloudGrad)"/>
-  <text x="300" y="275" font-family="system-ui, sans-serif" font-size="26" font-weight="bold" fill="#f8fafc" text-anchor="middle">Nimbus Personal Cloud</text>
-  <text x="300" y="308" font-family="system-ui, sans-serif" font-size="15" fill="#94a3b8" text-anchor="middle">Vista previa de gráficos vectoriales e imágenes</text>
-</svg>"""
-    with open(os.path.join(FILES_DIR, svg_disk), "w", encoding="utf-8") as f:
-        f.write(svg_content)
-
-    items = [
-        {
-            "id": folder_docs_id,
-            "name": "Documentos",
-            "type": "folder",
-            "parentId": None,
-            "size": 0,
-            "mimeType": "inode/directory",
-            "starred": True,
-            "trashed": False,
-            "createdAt": created,
-            "updatedAt": created,
-        },
-        {
-            "id": folder_proj_id,
-            "name": "Proyectos",
-            "type": "folder",
-            "parentId": None,
-            "size": 0,
-            "mimeType": "inode/directory",
-            "starred": False,
-            "trashed": False,
-            "createdAt": created,
-            "updatedAt": created,
-        },
-        {
-            "id": welcome_md_id,
-            "name": "Bienvenida a tu Nube.md",
-            "type": "file",
-            "parentId": None,
-            "size": len(welcome_content.encode("utf-8")),
-            "mimeType": "text/markdown",
-            "diskName": welcome_md_disk,
-            "starred": True,
-            "trashed": False,
-            "createdAt": created,
-            "updatedAt": created,
-        },
-        {
-            "id": svg_id,
-            "name": "Portada Nimbus Cloud.svg",
-            "type": "file",
-            "parentId": None,
-            "size": len(svg_content.encode("utf-8")),
-            "mimeType": "image/svg+xml",
-            "diskName": svg_disk,
-            "starred": False,
-            "trashed": False,
-            "createdAt": created,
-            "updatedAt": created,
-        },
-        {
-            "id": csv_id,
-            "name": "Roadmap Nube.csv",
-            "type": "file",
-            "parentId": None,
-            "size": len(csv_content.encode("utf-8")),
-            "mimeType": "text/csv",
-            "diskName": csv_disk,
-            "starred": False,
-            "trashed": False,
-            "createdAt": created,
-            "updatedAt": created,
-        },
-        {
-            "id": notes_md_id,
-            "name": "Notas y Tareas.md",
-            "type": "file",
-            "parentId": folder_docs_id,
-            "size": len(notes_content.encode("utf-8")),
-            "mimeType": "text/markdown",
-            "diskName": notes_md_disk,
-            "starred": False,
-            "trashed": False,
-            "createdAt": created,
-            "updatedAt": created,
-        },
-        {
-            "id": code_id,
-            "name": "demo-nube.js",
-            "type": "file",
-            "parentId": folder_proj_id,
-            "size": len(code_content.encode("utf-8")),
-            "mimeType": "application/javascript",
-            "diskName": code_disk,
-            "starred": False,
-            "trashed": False,
-            "createdAt": created,
-            "updatedAt": created,
-        },
-    ]
-
-    save_meta({
-        "items": items,
-        "shares": [],
-        "settings": {"quotaBytes": 5 * 1024 * 1024 * 1024, "pinHash": ""},
+    meta["items"].append({
+        "id": welcome_id,
+        "ownerId": user_id,
+        "name": f"Bienvenida de {display_name}.md",
+        "type": "file",
+        "parentId": None,
+        "size": len(encoded),
+        "mimeType": "text/markdown",
+        "diskName": disk_name,
+        "starred": True,
+        "trashed": False,
+        "sharedWith": [],
+        "createdAt": created,
+        "updatedAt": created,
     })
 
 
+def seed_initial_data():
+    """Inicializa usuarios y archivos de demostración."""
+    os.makedirs(FILES_DIR, exist_ok=True)
+    created = now_iso()
+    admin_id = str(uuid.uuid4())
+    guest_id = str(uuid.uuid4())
+
+    users = [
+        {
+            "id": admin_id,
+            "username": "admin",
+            "displayName": "Administrador Principal",
+            "passwordHash": hash_password("admin123"),
+            "role": "admin",
+            "avatarColor": "#38bdf8",
+            "quotaBytes": 5 * 1024 * 1024 * 1024,
+            "createdAt": created,
+        },
+        {
+            "id": guest_id,
+            "username": "invitado",
+            "displayName": "Usuario Invitado",
+            "passwordHash": hash_password("123456"),
+            "role": "user",
+            "avatarColor": "#10b981",
+            "quotaBytes": 2 * 1024 * 1024 * 1024,
+            "createdAt": created,
+        },
+    ]
+
+    meta = {"users": users, "sessions": {}, "items": [], "shares": []}
+    seed_user_welcome_files(meta, admin_id, "Administrador")
+    seed_user_welcome_files(meta, guest_id, "Invitado")
+    save_meta(meta)
+
+
 def get_descendant_ids(items, root_id):
-    """Obtiene todos los IDs hijos recursivamente para una carpeta."""
     result = set()
     stack = [root_id]
     while stack:
@@ -363,8 +253,24 @@ def build_breadcrumbs(items, folder_id):
     return crumbs
 
 
-def ensure_folder_path(meta, root_parent_id, folder_parts, now_str, folder_cache):
-    """Crea o reutiliza una jerarquía de carpetas (ej. ['Proyecto', 'src']) bajo root_parent_id."""
+def get_effective_share_permission(items, item, user_id):
+    """Verifica si el usuario tiene acceso directo o heredado de una carpeta padre compartida."""
+    if item.get("ownerId") == user_id:
+        return "owner"
+    item_map = {it["id"]: it for it in items}
+    curr = item
+    visited = set()
+    while curr and curr["id"] not in visited:
+        visited.add(curr["id"])
+        for entry in curr.get("sharedWith", []):
+            if entry.get("userId") == user_id:
+                return entry.get("permission", "view")
+        parent_id = curr.get("parentId")
+        curr = item_map.get(parent_id) if parent_id else None
+    return None
+
+
+def ensure_folder_path(meta, owner_id, root_parent_id, folder_parts, now_str, folder_cache):
     curr_parent = root_parent_id
     created_folders = []
     for part in folder_parts:
@@ -380,6 +286,7 @@ def ensure_folder_path(meta, root_parent_id, folder_parts, now_str, folder_cache
                 it
                 for it in meta["items"]
                 if it["type"] == "folder"
+                and it.get("ownerId") == owner_id
                 and not it.get("trashed", False)
                 and (it.get("parentId") or None) == curr_parent
                 and it["name"].lower() == clean_part.lower()
@@ -392,6 +299,7 @@ def ensure_folder_path(meta, root_parent_id, folder_parts, now_str, folder_cache
         else:
             new_folder = {
                 "id": str(uuid.uuid4()),
+                "ownerId": owner_id,
                 "name": clean_part,
                 "type": "folder",
                 "parentId": curr_parent,
@@ -399,6 +307,7 @@ def ensure_folder_path(meta, root_parent_id, folder_parts, now_str, folder_cache
                 "mimeType": "inode/directory",
                 "starred": False,
                 "trashed": False,
+                "sharedWith": [],
                 "createdAt": now_str,
                 "updatedAt": now_str,
             }
@@ -410,7 +319,6 @@ def ensure_folder_path(meta, root_parent_id, folder_parts, now_str, folder_cache
 
 
 def parse_multipart_form_data(headers, body: bytes):
-    """Parsea multipart/form-data usando la librería estándar email de Python 3."""
     content_type = headers.get("Content-Type", "")
     raw_msg = (
         f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode("utf-8")
@@ -455,11 +363,22 @@ def is_share_expired(share):
         return False
 
 
+def sanitize_user(u):
+    return {
+        "id": u["id"],
+        "username": u["username"],
+        "displayName": u.get("displayName") or u["username"],
+        "role": u.get("role", "user"),
+        "avatarColor": u.get("avatarColor", "#38bdf8"),
+        "quotaBytes": u.get("quotaBytes", 5 * 1024 * 1024 * 1024),
+        "createdAt": u.get("createdAt"),
+    }
+
+
 class CloudRequestHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt, *args):
-        # Registro limpio en consola
         sys.stdout.write(f"[Nube] {self.address_string()} - {fmt % args}\n")
 
     def send_json(self, status_code, payload):
@@ -480,6 +399,21 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
             return json.loads(raw.decode("utf-8"))
         except Exception:
             return {}
+
+    def get_current_user(self, meta, query=None):
+        auth_header = self.headers.get("Authorization", "")
+        token = ""
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:].strip()
+        elif query and "token" in query:
+            token = query["token"][0]
+        if not token:
+            return None, ""
+        user_id = meta.get("sessions", {}).get(token)
+        if not user_id:
+            return None, ""
+        user = next((u for u in meta.get("users", []) if u["id"] == user_id), None)
+        return user, token
 
     def serve_file_bytes(self, file_path, mime_type, download_name=None):
         if not os.path.exists(file_path):
@@ -569,18 +503,66 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
         path = parsed.path
         query = urllib.parse.parse_qs(parsed.query)
 
-        # --- API: Listar elementos y estadísticas ---
+        # --- API: Sesión actual ---
+        if path == "/api/auth/me":
+            meta = load_meta()
+            user, _ = self.get_current_user(meta, query)
+            if not user:
+                self.send_json(401, {"error": "No autenticado"})
+                return
+            self.send_json(200, {"user": sanitize_user(user)})
+            return
+
+        # --- API: Directorio de usuarios (para compartir y panel admin) ---
+        if path == "/api/users":
+            meta = load_meta()
+            user, _ = self.get_current_user(meta, query)
+            if not user:
+                self.send_json(401, {"error": "No autenticado"})
+                return
+            out_users = []
+            for u in meta["users"]:
+                u_info = sanitize_user(u)
+                u_info["usedBytes"] = sum(
+                    it.get("size", 0)
+                    for it in meta["items"]
+                    if it.get("ownerId") == u["id"] and it["type"] == "file" and not it.get("trashed", False)
+                )
+                u_info["filesCount"] = sum(
+                    1
+                    for it in meta["items"]
+                    if it.get("ownerId") == u["id"] and it["type"] == "file" and not it.get("trashed", False)
+                )
+                out_users.append(u_info)
+            self.send_json(200, {"users": out_users})
+            return
+
+        # --- API: Listar elementos del usuario y elementos compartidos con él ---
         if path == "/api/items":
             meta = load_meta()
+            user, _ = self.get_current_user(meta, query)
+            if not user:
+                self.send_json(401, {"error": "No autenticado"})
+                return
+
+            uid = user["id"]
             items = meta["items"]
             shares = meta["shares"]
-            active_share_ids = {
-                s["itemId"] for s in shares if not is_share_expired(s)
-            }
+            user_map = {u["id"]: u for u in meta["users"]}
+            active_share_ids = {s["itemId"] for s in shares if not is_share_expired(s)}
 
-            enriched = []
+            own_items = []
+            shared_with_me = []
+
             for it in items:
+                perm = get_effective_share_permission(items, it, uid)
+                if not perm:
+                    continue
                 copy_it = dict(it)
+                owner_obj = user_map.get(copy_it.get("ownerId"), {})
+                copy_it["ownerUsername"] = owner_obj.get("username", "admin")
+                copy_it["ownerDisplayName"] = owner_obj.get("displayName", "Administrador")
+                copy_it["myPermission"] = perm
                 if copy_it["type"] == "folder":
                     copy_it["size"] = compute_folder_size(items, copy_it["id"])
                     copy_it["childrenCount"] = sum(
@@ -588,8 +570,14 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
                         for c in items
                         if c.get("parentId") == copy_it["id"] and not c.get("trashed", False)
                     )
-                copy_it["isShared"] = copy_it["id"] in active_share_ids
-                enriched.append(copy_it)
+                copy_it["isShared"] = (
+                    copy_it["id"] in active_share_ids or len(copy_it.get("sharedWith", [])) > 0
+                )
+
+                if perm == "owner":
+                    own_items.append(copy_it)
+                elif not copy_it.get("trashed", False):
+                    shared_with_me.append(copy_it)
 
             parent_id = query.get("parentId", [None])[0]
             if parent_id in ("", "null", "root"):
@@ -597,24 +585,25 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
 
             total_used = sum(
                 it.get("size", 0)
-                for it in items
+                for it in own_items
                 if it["type"] == "file" and not it.get("trashed", False)
             )
             trash_used = sum(
                 it.get("size", 0)
-                for it in items
+                for it in own_items
                 if it["type"] == "file" and it.get("trashed", False)
             )
 
             self.send_json(200, {
-                "items": enriched,
+                "items": own_items,
+                "sharedWithMe": shared_with_me,
                 "breadcrumbs": build_breadcrumbs(items, parent_id),
                 "stats": {
                     "usedBytes": total_used,
                     "trashBytes": trash_used,
-                    "quotaBytes": meta.get("settings", {}).get("quotaBytes", 5 * 1024 * 1024 * 1024),
-                    "totalFiles": sum(1 for it in items if it["type"] == "file" and not it.get("trashed", False)),
-                    "totalFolders": sum(1 for it in items if it["type"] == "folder" and not it.get("trashed", False)),
+                    "quotaBytes": user.get("quotaBytes", 5 * 1024 * 1024 * 1024),
+                    "totalFiles": sum(1 for it in own_items if it["type"] == "file" and not it.get("trashed", False)),
+                    "totalFolders": sum(1 for it in own_items if it["type"] == "folder" and not it.get("trashed", False)),
                 },
             })
             return
@@ -623,9 +612,13 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/files/") and path.endswith("/content"):
             file_id = path.split("/")[3]
             meta = load_meta()
+            user, _ = self.get_current_user(meta, query)
+            if not user:
+                self.send_json(401, {"error": "No autenticado"})
+                return
             item = next((it for it in meta["items"] if it["id"] == file_id and it["type"] == "file"), None)
-            if not item:
-                self.send_json(404, {"error": "Archivo no encontrado"})
+            if not item or not get_effective_share_permission(meta["items"], item, user["id"]):
+                self.send_json(404, {"error": "Archivo no encontrado o sin acceso"})
                 return
             disk_path = os.path.join(FILES_DIR, item.get("diskName", ""))
             if not os.path.exists(disk_path):
@@ -637,14 +630,24 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
             except UnicodeDecodeError:
                 with open(disk_path, "r", encoding="latin-1", errors="replace") as f:
                     text = f.read()
-            self.send_json(200, {"id": item["id"], "name": item["name"], "content": text, "updatedAt": item["updatedAt"]})
+            self.send_json(200, {
+                "id": item["id"],
+                "name": item["name"],
+                "content": text,
+                "updatedAt": item["updatedAt"],
+                "myPermission": get_effective_share_permission(meta["items"], item, user["id"]),
+            })
             return
 
         if path.startswith("/api/files/") and path.endswith("/preview"):
             file_id = path.split("/")[3]
             meta = load_meta()
+            user, _ = self.get_current_user(meta, query)
+            if not user:
+                self.send_json(401, {"error": "No autenticado"})
+                return
             item = next((it for it in meta["items"] if it["id"] == file_id and it["type"] == "file"), None)
-            if not item:
+            if not item or not get_effective_share_permission(meta["items"], item, user["id"]):
                 self.send_json(404, {"error": "Archivo no encontrado"})
                 return
             disk_path = os.path.join(FILES_DIR, item.get("diskName", ""))
@@ -655,8 +658,12 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/files/") and path.endswith("/download"):
             file_id = path.split("/")[3]
             meta = load_meta()
+            user, _ = self.get_current_user(meta, query)
+            if not user:
+                self.send_json(401, {"error": "No autenticado"})
+                return
             item = next((it for it in meta["items"] if it["id"] == file_id and it["type"] == "file"), None)
-            if not item:
+            if not item or not get_effective_share_permission(meta["items"], item, user["id"]):
                 self.send_json(404, {"error": "Archivo no encontrado"})
                 return
             disk_path = os.path.join(FILES_DIR, item.get("diskName", ""))
@@ -667,21 +674,29 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/folders/") and path.endswith("/zip"):
             folder_id = path.split("/")[3]
             meta = load_meta()
+            user, _ = self.get_current_user(meta, query)
+            if not user:
+                self.send_json(401, {"error": "No autenticado"})
+                return
             folder = next((it for it in meta["items"] if it["id"] == folder_id and it["type"] == "folder"), None)
-            if not folder:
+            if not folder or not get_effective_share_permission(meta["items"], folder, user["id"]):
                 self.send_json(404, {"error": "Carpeta no encontrada"})
                 return
             self.serve_folder_zip(meta, folder)
             return
 
-        # --- API: Listar enlaces compartidos ---
+        # --- API: Listar enlaces públicos del usuario actual ---
         if path == "/api/shares":
             meta = load_meta()
+            user, _ = self.get_current_user(meta, query)
+            if not user:
+                self.send_json(401, {"error": "No autenticado"})
+                return
             item_map = {it["id"]: it for it in meta["items"]}
             result = []
             for s in meta["shares"]:
                 it = item_map.get(s["itemId"])
-                if not it or it.get("trashed", False):
+                if not it or it.get("trashed", False) or it.get("ownerId") != user["id"]:
                     continue
                 result.append({
                     "token": s["token"],
@@ -699,10 +714,9 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
             self.send_json(200, {"shares": result})
             return
 
-        # --- API: Vista pública de enlace compartido ---
+        # --- API: Vista pública de enlace compartido (sin requerir login) ---
         if path.startswith("/api/public/"):
             parts = path.strip("/").split("/")
-            # /api/public/:token  o /api/public/:token/raw
             token = parts[2] if len(parts) >= 3 else ""
             action = parts[3] if len(parts) >= 4 else "info"
 
@@ -813,6 +827,119 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+        query = urllib.parse.parse_qs(parsed.query)
+
+        # --- API: Iniciar sesión ---
+        if path == "/api/auth/login":
+            body = self.read_json_body()
+            username = (body.get("username") or "").strip().lower()
+            password = body.get("password") or ""
+            meta = load_meta()
+            user = next((u for u in meta["users"] if u["username"].lower() == username), None)
+            if not user or user.get("passwordHash") != hash_password(password):
+                self.send_json(401, {"error": "Usuario o contraseña incorrectos"})
+                return
+            token = uuid.uuid4().hex
+            meta["sessions"][token] = user["id"]
+            save_meta(meta)
+            self.send_json(200, {"token": token, "user": sanitize_user(user)})
+            return
+
+        # --- API: Registrar nuevo usuario ---
+        if path == "/api/auth/register":
+            body = self.read_json_body()
+            username = (body.get("username") or "").strip().lower()
+            display_name = (body.get("displayName") or username).strip()
+            password = body.get("password") or ""
+
+            if len(username) < 3 or " " in username:
+                self.send_json(400, {"error": "El nombre de usuario debe tener al menos 3 caracteres y sin espacios"})
+                return
+            if len(password) < 4:
+                self.send_json(400, {"error": "La contraseña debe tener al menos 4 caracteres"})
+                return
+
+            meta = load_meta()
+            if any(u["username"].lower() == username for u in meta["users"]):
+                self.send_json(409, {"error": "Ese nombre de usuario ya está registrado"})
+                return
+
+            new_user_id = str(uuid.uuid4())
+            color = AVATAR_COLORS[len(meta["users"]) % len(AVATAR_COLORS)]
+            new_user = {
+                "id": new_user_id,
+                "username": username,
+                "displayName": display_name,
+                "passwordHash": hash_password(password),
+                "role": "user",
+                "avatarColor": color,
+                "quotaBytes": 5 * 1024 * 1024 * 1024,
+                "createdAt": now_iso(),
+            }
+            meta["users"].append(new_user)
+            seed_user_welcome_files(meta, new_user_id, display_name)
+
+            token = uuid.uuid4().hex
+            meta["sessions"][token] = new_user_id
+            save_meta(meta)
+            self.send_json(201, {"token": token, "user": sanitize_user(new_user)})
+            return
+
+        # --- API: Cerrar sesión ---
+        if path == "/api/auth/logout":
+            meta = load_meta()
+            _, token = self.get_current_user(meta, query)
+            if token and token in meta.get("sessions", {}):
+                del meta["sessions"][token]
+                save_meta(meta)
+            self.send_json(200, {"loggedOut": True})
+            return
+
+        # Todas las rutas siguientes requieren usuario autenticado
+        meta = load_meta()
+        user, _ = self.get_current_user(meta, query)
+        if not user:
+            self.send_json(401, {"error": "Sesión expirada o no autenticada"})
+            return
+
+        # --- API: Compartir internamente con otro usuario ---
+        if path.startswith("/api/items/") and path.endswith("/share-user"):
+            item_id = path.split("/")[3]
+            body = self.read_json_body()
+            target_user_id = body.get("targetUserId")
+            permission = body.get("permission", "view")
+            if permission not in ("view", "edit"):
+                permission = "view"
+
+            item = next((it for it in meta["items"] if it["id"] == item_id and it.get("ownerId") == user["id"]), None)
+            if not item:
+                self.send_json(404, {"error": "Solo el propietario puede administrar los permisos de este elemento"})
+                return
+
+            target_user = next((u for u in meta["users"] if u["id"] == target_user_id), None)
+            if not target_user or target_user["id"] == user["id"]:
+                self.send_json(400, {"error": "Selecciona un usuario válido distinto al tuyo"})
+                return
+
+            if "sharedWith" not in item:
+                item["sharedWith"] = []
+
+            existing_entry = next((e for e in item["sharedWith"] if e["userId"] == target_user["id"]), None)
+            if existing_entry:
+                existing_entry["permission"] = permission
+                existing_entry["sharedAt"] = now_iso()
+            else:
+                item["sharedWith"].append({
+                    "userId": target_user["id"],
+                    "username": target_user["username"],
+                    "displayName": target_user.get("displayName", target_user["username"]),
+                    "permission": permission,
+                    "sharedAt": now_iso(),
+                })
+
+            save_meta(meta)
+            self.send_json(200, {"item": item})
+            return
 
         # --- API: Crear nueva carpeta ---
         if path == "/api/folders":
@@ -825,10 +952,10 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
                 self.send_json(400, {"error": "El nombre de la carpeta es obligatorio"})
                 return
 
-            meta = load_meta()
             now = now_iso()
             new_folder = {
                 "id": str(uuid.uuid4()),
+                "ownerId": user["id"],
                 "name": name,
                 "type": "folder",
                 "parentId": parent_id,
@@ -836,6 +963,7 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
                 "mimeType": "inode/directory",
                 "starred": False,
                 "trashed": False,
+                "sharedWith": [],
                 "createdAt": now,
                 "updatedAt": now,
             }
@@ -865,9 +993,9 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
 
             mime = mimetypes.guess_type(name)[0] or ("text/markdown" if ext == ".md" else "text/plain")
             now = now_iso()
-            meta = load_meta()
             new_item = {
                 "id": file_id,
+                "ownerId": user["id"],
                 "name": name,
                 "type": "file",
                 "parentId": parent_id,
@@ -876,6 +1004,7 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
                 "diskName": disk_name,
                 "starred": False,
                 "trashed": False,
+                "sharedWith": [],
                 "createdAt": now,
                 "updatedAt": now,
             }
@@ -884,7 +1013,7 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
             self.send_json(201, {"item": new_item})
             return
 
-        # --- API: Subir uno o varios archivos o carpetas completas (multipart/form-data) ---
+        # --- API: Subir uno o varios archivos o carpetas completas ---
         if path == "/api/upload":
             length = int(self.headers.get("Content-Length", 0))
             if length <= 0:
@@ -914,17 +1043,15 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
                 self.send_json(400, {"error": "No se seleccionaron archivos ni carpetas válidas"})
                 return
 
-            meta = load_meta()
             now = now_iso()
             created_items = []
             folder_cache = {}
 
-            # Crear carpetas vacías o estructura base enviada
             for ef_path in empty_folders:
                 norm_ef = str(ef_path).replace("\\", "/").strip("/")
                 parts = [p for p in norm_ef.split("/") if p and p != "."]
                 if parts:
-                    _, new_f = ensure_folder_path(meta, parent_id, parts, now, folder_cache)
+                    _, new_f = ensure_folder_path(meta, user["id"], parent_id, parts, now, folder_cache)
                     created_items.extend(new_f)
 
             for idx, uf in enumerate(uploaded_files):
@@ -935,7 +1062,7 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
                 if len(parts) > 1:
                     folder_parts = parts[:-1]
                     orig_name = parts[-1]
-                    target_parent_id, new_f = ensure_folder_path(meta, parent_id, folder_parts, now, folder_cache)
+                    target_parent_id, new_f = ensure_folder_path(meta, user["id"], parent_id, folder_parts, now, folder_cache)
                     created_items.extend(new_f)
                 else:
                     target_parent_id = parent_id
@@ -952,6 +1079,7 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
                 mime = guessed_mime or uf["contentType"] or "application/octet-stream"
                 item = {
                     "id": file_id,
+                    "ownerId": user["id"],
                     "name": orig_name,
                     "type": "file",
                     "parentId": target_parent_id,
@@ -960,6 +1088,7 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
                     "diskName": disk_name,
                     "starred": False,
                     "trashed": False,
+                    "sharedWith": [],
                     "createdAt": now,
                     "updatedAt": now,
                 }
@@ -970,17 +1099,19 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
             self.send_json(201, {"items": created_items})
             return
 
-        # --- API: Crear enlace compartido ---
+        # --- API: Crear enlace público compartido ---
         if path == "/api/shares":
             body = self.read_json_body()
             item_id = body.get("itemId")
             password = (body.get("password") or "").strip()
             expires_in_hours = body.get("expiresInHours")
 
-            meta = load_meta()
-            item = next((it for it in meta["items"] if it["id"] == item_id and not it.get("trashed", False)), None)
+            item = next(
+                (it for it in meta["items"] if it["id"] == item_id and it.get("ownerId") == user["id"] and not it.get("trashed", False)),
+                None,
+            )
             if not item:
-                self.send_json(404, {"error": "El archivo o carpeta no existe"})
+                self.send_json(404, {"error": "El archivo o carpeta no existe en tu unidad"})
                 return
 
             expires_at = None
@@ -991,6 +1122,7 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
             token = uuid.uuid4().hex[:12]
             share_obj = {
                 "token": token,
+                "ownerId": user["id"],
                 "itemId": item["id"],
                 "passwordHash": hash_password(password) if password else "",
                 "expiresAt": expires_at,
@@ -1013,10 +1145,12 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
             })
             return
 
-        # --- API: Vaciar papelera ---
+        # --- API: Vaciar papelera del usuario actual ---
         if path == "/api/trash/empty":
-            meta = load_meta()
-            trashed_roots = [it["id"] for it in meta["items"] if it.get("trashed", False)]
+            trashed_roots = [
+                it["id"] for it in meta["items"]
+                if it.get("ownerId") == user["id"] and it.get("trashed", False)
+            ]
             to_remove = set(trashed_roots)
             for tid in trashed_roots:
                 to_remove.update(get_descendant_ids(meta["items"], tid))
@@ -1045,16 +1179,26 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
     def do_PUT(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+        query = urllib.parse.parse_qs(parsed.query)
 
-        # --- API: Guardar edición de archivo de texto / Markdown ---
+        meta = load_meta()
+        user, _ = self.get_current_user(meta, query)
+        if not user:
+            self.send_json(401, {"error": "No autenticado"})
+            return
+
+        # --- API: Guardar edición de archivo de texto / Markdown (Propietario o Permiso Edit) ---
         if path.startswith("/api/files/") and path.endswith("/content"):
             file_id = path.split("/")[3]
             body = self.read_json_body()
             new_content = body.get("content", "")
-            meta = load_meta()
             item = next((it for it in meta["items"] if it["id"] == file_id and it["type"] == "file"), None)
             if not item:
                 self.send_json(404, {"error": "Archivo no encontrado"})
+                return
+            perm = get_effective_share_permission(meta["items"], item, user["id"])
+            if perm not in ("owner", "edit"):
+                self.send_json(403, {"error": "Solo tienes permiso de lectura en este archivo"})
                 return
             disk_path = os.path.join(FILES_DIR, item.get("diskName", ""))
             encoded = new_content.encode("utf-8")
@@ -1071,15 +1215,25 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
     def do_PATCH(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+        query = urllib.parse.parse_qs(parsed.query)
 
-        # --- API: Actualizar metadatos (renombrar, mover, destacar, enviar/restaurar de papelera) ---
+        meta = load_meta()
+        user, _ = self.get_current_user(meta, query)
+        if not user:
+            self.send_json(401, {"error": "No autenticado"})
+            return
+
         if path.startswith("/api/items/"):
             item_id = path.split("/")[3]
             body = self.read_json_body()
-            meta = load_meta()
             item = next((it for it in meta["items"] if it["id"] == item_id), None)
             if not item:
                 self.send_json(404, {"error": "Elemento no encontrado"})
+                return
+
+            perm = get_effective_share_permission(meta["items"], item, user["id"])
+            if perm not in ("owner", "edit"):
+                self.send_json(403, {"error": "No tienes permisos para modificar este elemento"})
                 return
 
             if "name" in body and str(body["name"]).strip():
@@ -1089,10 +1243,10 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
                     if guessed:
                         item["mimeType"] = guessed
 
-            if "starred" in body:
+            if "starred" in body and perm == "owner":
                 item["starred"] = bool(body["starred"])
 
-            if "trashed" in body:
+            if "trashed" in body and perm == "owner":
                 trashed_val = bool(body["trashed"])
                 item["trashed"] = trashed_val
                 if item["type"] == "folder":
@@ -1101,7 +1255,7 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
                         if desc_item:
                             desc_item["trashed"] = trashed_val
 
-            if "parentId" in body:
+            if "parentId" in body and perm == "owner":
                 new_parent = body["parentId"]
                 if new_parent in ("", "null", "root"):
                     new_parent = None
@@ -1123,14 +1277,34 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+        query = urllib.parse.parse_qs(parsed.query)
+
+        meta = load_meta()
+        user, _ = self.get_current_user(meta, query)
+        if not user:
+            self.send_json(401, {"error": "No autenticado"})
+            return
+
+        # --- API: Quitar acceso compartido a un usuario ---
+        if path.startswith("/api/items/") and "/share-user/" in path:
+            parts = path.strip("/").split("/")
+            item_id = parts[2]
+            target_uid = parts[4]
+            item = next((it for it in meta["items"] if it["id"] == item_id and it.get("ownerId") == user["id"]), None)
+            if not item:
+                self.send_json(404, {"error": "Elemento no encontrado"})
+                return
+            item["sharedWith"] = [e for e in item.get("sharedWith", []) if e.get("userId") != target_uid]
+            save_meta(meta)
+            self.send_json(200, {"item": item})
+            return
 
         # --- API: Eliminar elemento permanentemente ---
         if path.startswith("/api/items/"):
             item_id = path.split("/")[3]
-            meta = load_meta()
-            item = next((it for it in meta["items"] if it["id"] == item_id), None)
+            item = next((it for it in meta["items"] if it["id"] == item_id and it.get("ownerId") == user["id"]), None)
             if not item:
-                self.send_json(404, {"error": "Elemento no encontrado"})
+                self.send_json(404, {"error": "Elemento no encontrado o no eres el propietario"})
                 return
 
             to_delete = {item_id}
@@ -1159,9 +1333,11 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
         # --- API: Revocar enlace compartido ---
         if path.startswith("/api/shares/"):
             token = path.split("/")[3]
-            meta = load_meta()
             before = len(meta["shares"])
-            meta["shares"] = [s for s in meta["shares"] if s["token"] != token]
+            meta["shares"] = [
+                s for s in meta["shares"]
+                if not (s["token"] == token and s.get("ownerId") == user["id"])
+            ]
             save_meta(meta)
             self.send_json(200, {"revoked": before != len(meta["shares"])})
             return
@@ -1178,7 +1354,7 @@ def main():
     ensure_storage()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), CloudRequestHandler)
     print("============================================================", flush=True)
-    print(f" [Nimbus Cloud] Servidor iniciado en: http://localhost:{PORT}", flush=True)
+    print(f" [Nimbus Cloud v1.2.0] Servidor Multiusuario en: http://localhost:{PORT}", flush=True)
     print(f" [Storage] Almacenamiento en disco: {FILES_DIR}", flush=True)
     print("============================================================", flush=True)
     try:

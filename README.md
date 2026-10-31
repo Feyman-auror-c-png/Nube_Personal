@@ -1,11 +1,11 @@
-# ☁️ Nimbus Cloud — Nube Personal Web (`v1.1.0`)
+# ☁️ Nimbus Cloud — Nube Personal Web Multiusuario (`v1.2.0`)
 
-![Versión](https://img.shields.io/badge/version-1.1.0-38bdf8?style=for-the-badge)
+![Versión](https://img.shields.io/badge/version-1.2.0-38bdf8?style=for-the-badge)
 ![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
 ![Estado](https://img.shields.io/badge/estado-Estable-10b981?style=for-the-badge)
 
-**Nimbus Cloud** es una plataforma web *full-stack* de **Nube Personal** diseñada para alojar, organizar, previsualizar antes de descargar, editar documentos **Markdown (`.md`)** en tiempo real y compartir archivos o carpetas mediante enlaces públicos protegidos.
+**Nimbus Cloud** es una plataforma web *full-stack* de **Nube Personal Multiusuario** diseñada para alojar, organizar, previsualizar antes de descargar, editar documentos **Markdown (`.md`)** en tiempo real y compartir archivos o carpetas tanto con otros usuarios de la nube como mediante enlaces públicos protegidos.
 
 ---
 

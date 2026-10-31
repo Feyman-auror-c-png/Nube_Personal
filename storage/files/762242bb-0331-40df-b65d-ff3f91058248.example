@@ -1,0 +1,5 @@
+# Mantenga estos valores únicamente en el servidor; no los exponga en el frontend.
+SAT_BASE_URL=https://srvnjs.santotomasport.com.gt
+SAT_USER=SAT
+SAT_PASSWORD=5341542d454d504f524e4143
+SAT_LOGIN_KEY=5341542d454d504f524e4143
