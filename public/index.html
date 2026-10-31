@@ -7,12 +7,12 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <!-- Overlay global para Drag & Drop de archivos -->
+  <!-- Overlay global para Drag & Drop de archivos y carpetas -->
   <div id="dropzone-overlay" class="dropzone-overlay hidden">
     <div class="dropzone-box">
-      <div class="dropzone-icon">☁️⬆️</div>
-      <h2>Suelta tus archivos aquí para subirlos</h2>
-      <p id="dropzone-target-label">Se guardarán en la carpeta actual</p>
+      <div class="dropzone-icon">☁️📂⬆️</div>
+      <h2>Suelta tus archivos o carpetas completas aquí</h2>
+      <p id="dropzone-target-label">Se conservará toda la estructura de subcarpetas automáticamente</p>
     </div>
   </div>
 
@@ -47,14 +47,19 @@
       </div>
 
       <div class="sidebar-cta">
-        <button class="btn btn-primary btn-block" id="btn-quick-upload">
-          <span>⬆️ Subir Archivos</span>
-        </button>
+        <div class="sidebar-upload-grid">
+          <button class="btn btn-primary" id="btn-quick-upload" title="Seleccionar archivos para subir">
+            <span>⬆️ Subir Archivos</span>
+          </button>
+          <button class="btn btn-accent-outline" id="btn-upload-folder" title="Subir una carpeta completa con sus subcarpetas">
+            <span>📁⬆️ Subir Carpeta</span>
+          </button>
+        </div>
         <div class="sidebar-quick-row">
           <button class="btn btn-secondary btn-sm" id="btn-new-md" title="Crear nuevo documento Markdown (.md)">
             📝 + Nuevo .md
           </button>
-          <button class="btn btn-secondary btn-sm" id="btn-new-folder" title="Crear nueva carpeta">
+          <button class="btn btn-secondary btn-sm" id="btn-new-folder" title="Crear nueva carpeta vacía">
             📁 + Carpeta
           </button>
         </div>
@@ -166,8 +171,9 @@
     </div>
   </div>
 
-  <!-- Input oculto para subir archivos -->
+  <!-- Inputs ocultos para subir archivos y carpetas completas -->
   <input type="file" id="hidden-file-input" multiple class="hidden" />
+  <input type="file" id="hidden-folder-input" webkitdirectory directory multiple class="hidden" />
 
   <!-- MODAL: PREVISUALIZADOR DE ARCHIVOS Y ESTUDIO MARKDOWN (.MD) -->
   <div id="preview-modal" class="modal-backdrop hidden">

@@ -363,6 +363,52 @@ def build_breadcrumbs(items, folder_id):
     return crumbs
 
 
+def ensure_folder_path(meta, root_parent_id, folder_parts, now_str, folder_cache):
+    """Crea o reutiliza una jerarquía de carpetas (ej. ['Proyecto', 'src']) bajo root_parent_id."""
+    curr_parent = root_parent_id
+    created_folders = []
+    for part in folder_parts:
+        clean_part = part.strip()
+        if not clean_part:
+            continue
+        cache_key = (curr_parent or "ROOT", clean_part.lower())
+        if cache_key in folder_cache:
+            curr_parent = folder_cache[cache_key]
+            continue
+        existing = next(
+            (
+                it
+                for it in meta["items"]
+                if it["type"] == "folder"
+                and not it.get("trashed", False)
+                and (it.get("parentId") or None) == curr_parent
+                and it["name"].lower() == clean_part.lower()
+            ),
+            None,
+        )
+        if existing:
+            curr_parent = existing["id"]
+            folder_cache[cache_key] = curr_parent
+        else:
+            new_folder = {
+                "id": str(uuid.uuid4()),
+                "name": clean_part,
+                "type": "folder",
+                "parentId": curr_parent,
+                "size": 0,
+                "mimeType": "inode/directory",
+                "starred": False,
+                "trashed": False,
+                "createdAt": now_str,
+                "updatedAt": now_str,
+            }
+            meta["items"].append(new_folder)
+            created_folders.append(new_folder)
+            curr_parent = new_folder["id"]
+            folder_cache[cache_key] = curr_parent
+    return curr_parent, created_folders
+
+
 def parse_multipart_form_data(headers, body: bytes):
     """Parsea multipart/form-data usando la librería estándar email de Python 3."""
     content_type = headers.get("Content-Type", "")
@@ -838,7 +884,7 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
             self.send_json(201, {"item": new_item})
             return
 
-        # --- API: Subir uno o varios archivos (multipart/form-data) ---
+        # --- API: Subir uno o varios archivos o carpetas completas (multipart/form-data) ---
         if path == "/api/upload":
             length = int(self.headers.get("Content-Length", 0))
             if length <= 0:
@@ -850,16 +896,51 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
             if parent_id in ("", "null", "root"):
                 parent_id = None
 
-            if not uploaded_files:
-                self.send_json(400, {"error": "No se seleccionaron archivos"})
+            rel_paths = []
+            if "relativePaths" in fields:
+                try:
+                    rel_paths = json.loads(fields["relativePaths"])
+                except Exception:
+                    rel_paths = []
+
+            empty_folders = []
+            if "emptyFolders" in fields:
+                try:
+                    empty_folders = json.loads(fields["emptyFolders"])
+                except Exception:
+                    empty_folders = []
+
+            if not uploaded_files and not empty_folders:
+                self.send_json(400, {"error": "No se seleccionaron archivos ni carpetas válidas"})
                 return
 
             meta = load_meta()
             now = now_iso()
             created_items = []
+            folder_cache = {}
 
-            for uf in uploaded_files:
-                orig_name = os.path.basename(uf["filename"] or "archivo")
+            # Crear carpetas vacías o estructura base enviada
+            for ef_path in empty_folders:
+                norm_ef = str(ef_path).replace("\\", "/").strip("/")
+                parts = [p for p in norm_ef.split("/") if p and p != "."]
+                if parts:
+                    _, new_f = ensure_folder_path(meta, parent_id, parts, now, folder_cache)
+                    created_items.extend(new_f)
+
+            for idx, uf in enumerate(uploaded_files):
+                rel_p = rel_paths[idx] if idx < len(rel_paths) and rel_paths[idx] else (uf["filename"] or "archivo")
+                norm_rel = str(rel_p).replace("\\", "/").strip("/")
+                parts = [p for p in norm_rel.split("/") if p and p != "."]
+
+                if len(parts) > 1:
+                    folder_parts = parts[:-1]
+                    orig_name = parts[-1]
+                    target_parent_id, new_f = ensure_folder_path(meta, parent_id, folder_parts, now, folder_cache)
+                    created_items.extend(new_f)
+                else:
+                    target_parent_id = parent_id
+                    orig_name = parts[0] if parts else os.path.basename(uf["filename"] or "archivo")
+
                 ext = os.path.splitext(orig_name)[1].lower()
                 file_id = str(uuid.uuid4())
                 disk_name = f"{file_id}{ext}"
@@ -873,7 +954,7 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
                     "id": file_id,
                     "name": orig_name,
                     "type": "file",
-                    "parentId": parent_id,
+                    "parentId": target_parent_id,
                     "size": len(uf["data"]),
                     "mimeType": mime,
                     "diskName": disk_name,

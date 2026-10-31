@@ -992,29 +992,230 @@ function updateImageTransform() {
 }
 
 // ============================================================================
-// OPERACIONES CRUD: SUBIR, CARPETAS, NUEVO .MD, MOVER, RENOMBRAR, PAPELERA
+// COMPONENTE SELECT PERSONALIZADO ULTRA-MODERNO (.custom-select)
 // ============================================================================
+
+function enhanceSelectElement(selectEl) {
+  if (!selectEl) return;
+
+  // Si ya fue mejorado previamente, reconstruir sus opciones
+  let wrapper = selectEl.closest(".custom-select-wrapper");
+  if (!wrapper) {
+    wrapper = document.createElement("div");
+    wrapper.className = "custom-select-wrapper";
+    selectEl.parentNode.insertBefore(wrapper, selectEl);
+    wrapper.appendChild(selectEl);
+  } else {
+    wrapper.querySelectorAll(".custom-select-trigger, .custom-select-menu").forEach((el) => el.remove());
+  }
+
+  selectEl.classList.add("hidden");
+
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "custom-select-trigger";
+
+  const selectedOpt = selectEl.options[selectEl.selectedIndex] || selectEl.options[0];
+  const labelSpan = document.createElement("span");
+  labelSpan.className = "custom-select-label";
+  labelSpan.textContent = selectedOpt ? selectedOpt.textContent : "Seleccionar...";
+
+  const chevronSpan = document.createElement("span");
+  chevronSpan.className = "custom-select-chevron";
+  chevronSpan.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+
+  trigger.appendChild(labelSpan);
+  trigger.appendChild(chevronSpan);
+
+  const menu = document.createElement("div");
+  menu.className = "custom-select-menu";
+
+  Array.from(selectEl.options).forEach((opt, idx) => {
+    const optBtn = document.createElement("button");
+    optBtn.type = "button";
+    optBtn.className = `custom-select-option ${idx === selectEl.selectedIndex ? "selected" : ""}`;
+    optBtn.dataset.value = opt.value;
+    optBtn.innerHTML = `
+      <span>${escapeHtml(opt.textContent)}</span>
+      <span class="custom-select-check">✓</span>
+    `;
+    optBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      selectEl.value = opt.value;
+      selectEl.selectedIndex = idx;
+      labelSpan.textContent = opt.textContent;
+      menu.querySelectorAll(".custom-select-option").forEach((b) => b.classList.remove("selected"));
+      optBtn.classList.add("selected");
+      wrapper.classList.remove("open");
+      selectEl.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    menu.appendChild(optBtn);
+  });
+
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = wrapper.classList.contains("open");
+    document.querySelectorAll(".custom-select-wrapper.open").forEach((w) => w.classList.remove("open"));
+    if (!isOpen) {
+      wrapper.classList.add("open");
+    }
+  });
+
+  wrapper.appendChild(trigger);
+  wrapper.appendChild(menu);
+}
+
+function enhanceAllSelects() {
+  document.querySelectorAll("select").forEach((sel) => enhanceSelectElement(sel));
+}
+
+// ============================================================================
+// SUBIDA DE ARCHIVOS Y CARPETAS COMPLETAS (DRAG & DROP RECURSIVO + SELECTOR)
+// ============================================================================
+
+async function readDirectoryEntriesRecursive(dirEntry, basePath = "") {
+  const currentDirPath = basePath ? `${basePath}/${dirEntry.name}` : dirEntry.name;
+  const reader = dirEntry.createReader();
+  const allEntries = [];
+
+  // readEntries devuelve lotes; debemos llamar hasta que devuelva un arreglo vacío
+  while (true) {
+    const batch = await new Promise((resolve, reject) => {
+      reader.readEntries(resolve, reject);
+    });
+    if (!batch || batch.length === 0) break;
+    allEntries.push(...batch);
+  }
+
+  const filesWithPaths = [];
+  const emptyFolders = [currentDirPath];
+
+  for (const entry of allEntries) {
+    if (entry.isFile) {
+      const fileObj = await new Promise((resolve, reject) => {
+        entry.file(resolve, reject);
+      });
+      filesWithPaths.push({
+        file: fileObj,
+        relativePath: `${currentDirPath}/${fileObj.name}`,
+      });
+    } else if (entry.isDirectory) {
+      const subResult = await readDirectoryEntriesRecursive(entry, currentDirPath);
+      filesWithPaths.push(...subResult.filesWithPaths);
+      emptyFolders.push(...subResult.emptyFolders);
+    }
+  }
+
+  return { filesWithPaths, emptyFolders };
+}
+
+async function extractDroppedItems(dataTransfer) {
+  const filesWithPaths = [];
+  const emptyFolders = [];
+
+  if (dataTransfer.items && dataTransfer.items.length > 0) {
+    const entries = [];
+    for (let i = 0; i < dataTransfer.items.length; i++) {
+      const item = dataTransfer.items[i];
+      if (item.kind === "file" && typeof item.webkitGetAsEntry === "function") {
+        const entry = item.webkitGetAsEntry();
+        if (entry) entries.push(entry);
+      }
+    }
+
+    if (entries.length > 0) {
+      for (const entry of entries) {
+        if (entry.isFile) {
+          const fileObj = await new Promise((resolve, reject) => {
+            entry.file(resolve, reject);
+          });
+          filesWithPaths.push({
+            file: fileObj,
+            relativePath: fileObj.name,
+          });
+        } else if (entry.isDirectory) {
+          const dirRes = await readDirectoryEntriesRecursive(entry, "");
+          filesWithPaths.push(...dirRes.filesWithPaths);
+          emptyFolders.push(...dirRes.emptyFolders);
+        }
+      }
+      return { filesWithPaths, emptyFolders };
+    }
+  }
+
+  // Fallback para navegadores sin webkitGetAsEntry
+  if (dataTransfer.files && dataTransfer.files.length > 0) {
+    for (const file of dataTransfer.files) {
+      filesWithPaths.push({
+        file,
+        relativePath: file.webkitRelativePath || file.name,
+      });
+    }
+  }
+
+  return { filesWithPaths, emptyFolders };
+}
+
+async function uploadFilesAndFolders(filesWithPaths = [], emptyFolders = []) {
+  if (filesWithPaths.length === 0 && emptyFolders.length === 0) return;
+
+  const formData = new FormData();
+  formData.append("parentId", state.currentFolderId || "");
+
+  const relPathsArray = [];
+  for (const item of filesWithPaths) {
+    formData.append("files", item.file);
+    relPathsArray.push(item.relativePath || item.file.webkitRelativePath || item.file.name);
+  }
+
+  formData.append("relativePaths", JSON.stringify(relPathsArray));
+  formData.append("emptyFolders", JSON.stringify(emptyFolders));
+
+  const hasFolders =
+    emptyFolders.length > 0 || relPathsArray.some((p) => p && p.includes("/"));
+
+  showToast(
+    hasFolders
+      ? `Subiendo carpeta (${filesWithPaths.length} archivo(s))...`
+      : `Subiendo ${filesWithPaths.length} archivo(s)...`,
+    "⬆️"
+  );
+
+  try {
+    const res = await fetch("/api/upload", {
+      method: "POST",
+      body: formData,
+    });
+    if (res.ok) {
+      showToast(
+        hasFolders
+          ? `Carpeta subida con éxito (${filesWithPaths.length} archivos)`
+          : `${filesWithPaths.length} archivo(s) subidos con éxito`,
+        "✅"
+      );
+      fetchCloudData();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(err.error || "Error al subir los elementos", "⚠️");
+    }
+  } catch (error) {
+    console.error("Error en subida:", error);
+    showToast("No se pudo completar la subida al servidor", "⚠️");
+  }
+}
 
 async function uploadFilesList(fileList) {
   if (!fileList || fileList.length === 0) return;
-  const formData = new FormData();
-  formData.append("parentId", state.currentFolderId || "");
-  for (const file of fileList) {
-    formData.append("files", file);
-  }
-
-  showToast(`Subiendo ${fileList.length} archivo(s)...`, "⬆️");
-  const res = await fetch("/api/upload", {
-    method: "POST",
-    body: formData,
-  });
-  if (res.ok) {
-    showToast(`${fileList.length} archivo(s) subidos con éxito`, "✅");
-    fetchCloudData();
-  } else {
-    showToast("Error al subir archivos", "⚠️");
-  }
+  const filesWithPaths = Array.from(fileList).map((f) => ({
+    file: f,
+    relativePath: f.webkitRelativePath || f.name,
+  }));
+  await uploadFilesAndFolders(filesWithPaths, []);
 }
+
+// ============================================================================
+// OPERACIONES CRUD: CARPETAS, NUEVO .MD, MOVER, RENOMBRAR, PAPELERA
+// ============================================================================
 
 async function updateItem(itemId, patchData) {
   const res = await fetch(`/api/items/${itemId}`, {
@@ -1037,7 +1238,10 @@ function openDialogModal({ title, contentHtml, confirmText = "Guardar", onConfir
   document.getElementById("dialog-confirm").textContent = confirmText;
   modal.classList.remove("hidden");
 
-  const firstInput = modal.querySelector("input, select");
+  // Mejorar cualquier <select> dentro del diálogo
+  modal.querySelectorAll("select").forEach((sel) => enhanceSelectElement(sel));
+
+  const firstInput = modal.querySelector("input, .custom-select-trigger");
   if (firstInput) setTimeout(() => firstInput.focus(), 50);
 
   const form = document.getElementById("dialog-form");
@@ -1241,7 +1445,9 @@ function openShareModal(item) {
     item.name
   } (${formatBytes(item.size)})`;
   document.getElementById("share-password").value = "";
-  document.getElementById("share-expiry").value = "0";
+  const expirySelect = document.getElementById("share-expiry");
+  expirySelect.value = "0";
+  enhanceSelectElement(expirySelect);
   document.getElementById("share-generated-box").classList.add("hidden");
 
   renderItemExistingShares(item.id);
@@ -1466,6 +1672,9 @@ function applyTheme(theme) {
 function initApp() {
   applyTheme(state.theme);
 
+  // Mejorar todos los elementos <select> con el componente Custom Select
+  enhanceAllSelects();
+
   // Detectar si estamos visitando un enlace compartido (?share=TOKEN)
   const params = new URLSearchParams(window.location.search);
   const shareToken = params.get("share");
@@ -1490,13 +1699,24 @@ function initApp() {
     });
   });
 
-  // Botones de creación / subida rápida
+  // Botones de subida de archivos y subida de carpetas completas
   const fileInput = document.getElementById("hidden-file-input");
+  const folderInput = document.getElementById("hidden-folder-input");
+
   document.getElementById("btn-quick-upload").addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", () => {
     uploadFilesList(fileInput.files);
     fileInput.value = "";
   });
+
+  const btnUploadFolder = document.getElementById("btn-upload-folder");
+  if (btnUploadFolder && folderInput) {
+    btnUploadFolder.addEventListener("click", () => folderInput.click());
+    folderInput.addEventListener("change", () => {
+      uploadFilesList(folderInput.files);
+      folderInput.value = "";
+    });
+  }
 
   document.getElementById("btn-new-folder").addEventListener("click", promptNewFolder);
   document.getElementById("btn-new-md").addEventListener("click", promptNewMarkdownDoc);
@@ -1641,9 +1861,10 @@ function initApp() {
     document.getElementById("dialog-modal").classList.add("hidden");
   });
 
-  // Cerrar menú contextual al hacer clic fuera
+  // Cerrar menú contextual y custom selects al hacer clic fuera
   window.addEventListener("click", () => {
     document.getElementById("context-menu").classList.add("hidden");
+    document.querySelectorAll(".custom-select-wrapper.open").forEach((w) => w.classList.remove("open"));
   });
 
   // Atajos de teclado (Ctrl+K buscar, Ctrl+S guardar en editor .md, Esc cerrar modal)
@@ -1660,6 +1881,7 @@ function initApp() {
     }
     if (e.key === "Escape") {
       document.getElementById("context-menu").classList.add("hidden");
+      document.querySelectorAll(".custom-select-wrapper.open").forEach((w) => w.classList.remove("open"));
       document.getElementById("dialog-modal").classList.add("hidden");
       document.getElementById("share-modal").classList.add("hidden");
       if (!document.getElementById("preview-modal").classList.contains("hidden")) {
@@ -1668,12 +1890,16 @@ function initApp() {
     }
   });
 
-  // Drag & Drop de archivos externos hacia la ventana
+  // Drag & Drop de archivos y carpetas completas desde el sistema operativo
   let dragCounter = 0;
   const dropOverlay = document.getElementById("dropzone-overlay");
 
   window.addEventListener("dragenter", (e) => {
-    if (e.dataTransfer && e.dataTransfer.types.includes("Files")) {
+    if (
+      e.dataTransfer &&
+      e.dataTransfer.types.includes("Files") &&
+      !e.dataTransfer.types.includes("text/nimbus-item-id")
+    ) {
       e.preventDefault();
       dragCounter++;
       dropOverlay.classList.remove("hidden");
@@ -1681,13 +1907,21 @@ function initApp() {
   });
 
   window.addEventListener("dragover", (e) => {
-    if (e.dataTransfer && e.dataTransfer.types.includes("Files")) {
+    if (
+      e.dataTransfer &&
+      e.dataTransfer.types.includes("Files") &&
+      !e.dataTransfer.types.includes("text/nimbus-item-id")
+    ) {
       e.preventDefault();
     }
   });
 
   window.addEventListener("dragleave", (e) => {
-    if (e.dataTransfer && e.dataTransfer.types.includes("Files")) {
+    if (
+      e.dataTransfer &&
+      e.dataTransfer.types.includes("Files") &&
+      !e.dataTransfer.types.includes("text/nimbus-item-id")
+    ) {
       dragCounter--;
       if (dragCounter <= 0) {
         dragCounter = 0;
@@ -1696,12 +1930,17 @@ function initApp() {
     }
   });
 
-  window.addEventListener("drop", (e) => {
-    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+  window.addEventListener("drop", async (e) => {
+    if (
+      e.dataTransfer &&
+      e.dataTransfer.types.includes("Files") &&
+      !e.dataTransfer.types.includes("text/nimbus-item-id")
+    ) {
       e.preventDefault();
       dragCounter = 0;
       dropOverlay.classList.add("hidden");
-      uploadFilesList(e.dataTransfer.files);
+      const { filesWithPaths, emptyFolders } = await extractDroppedItems(e.dataTransfer);
+      await uploadFilesAndFolders(filesWithPaths, emptyFolders);
     }
   });
 

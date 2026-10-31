@@ -212,19 +212,91 @@ app.post("/api/files/text", (req, res) => {
   res.status(201).json({ item });
 });
 
+function ensureFolderPath(meta, rootParentId, folderParts, nowStr, folderCache) {
+  let currParent = rootParentId;
+  const createdFolders = [];
+  for (const part of folderParts) {
+    const cleanPart = (part || "").trim();
+    if (!cleanPart) continue;
+    const cacheKey = `${currParent || "ROOT"}:::${cleanPart.toLowerCase()}`;
+    if (folderCache.has(cacheKey)) {
+      currParent = folderCache.get(cacheKey);
+      continue;
+    }
+    const existing = meta.items.find(
+      (it) =>
+        it.type === "folder" &&
+        !it.trashed &&
+        (it.parentId || null) === currParent &&
+        it.name.toLowerCase() === cleanPart.toLowerCase()
+    );
+    if (existing) {
+      currParent = existing.id;
+      folderCache.set(cacheKey, currParent);
+    } else {
+      const newFolder = {
+        id: crypto.randomUUID(),
+        name: cleanPart,
+        type: "folder",
+        parentId: currParent,
+        size: 0,
+        mimeType: "inode/directory",
+        starred: false,
+        trashed: false,
+        createdAt: nowStr,
+        updatedAt: nowStr,
+      };
+      meta.items.push(newFolder);
+      createdFolders.push(newFolder);
+      currParent = newFolder.id;
+      folderCache.set(cacheKey, currParent);
+    }
+  }
+  return { targetParentId: currParent, createdFolders };
+}
+
 app.post("/api/upload", upload.array("files"), (req, res) => {
   const parentId =
     !req.body.parentId || req.body.parentId === "null" || req.body.parentId === "root"
       ? null
       : req.body.parentId;
+  let relPaths = [];
+  let emptyFolders = [];
+  try {
+    if (req.body.relativePaths) relPaths = JSON.parse(req.body.relativePaths);
+  } catch {}
+  try {
+    if (req.body.emptyFolders) emptyFolders = JSON.parse(req.body.emptyFolders);
+  } catch {}
+
   const meta = loadMeta();
   const now = new Date().toISOString();
-  const created = (req.files || []).map((f) => {
+  const folderCache = new Map();
+  const created = [];
+
+  for (const ef of emptyFolders) {
+    const parts = String(ef).replace(/\\/g, "/").split("/").filter(Boolean);
+    if (parts.length > 0) {
+      const { createdFolders } = ensureFolderPath(meta, parentId, parts, now, folderCache);
+      created.push(...createdFolders);
+    }
+  }
+
+  (req.files || []).forEach((f, idx) => {
+    const rawRel = relPaths[idx] || Buffer.from(f.originalname, "latin1").toString("utf8");
+    const parts = String(rawRel).replace(/\\/g, "/").split("/").filter(Boolean);
+    let targetParentId = parentId;
+    let origName = parts[parts.length - 1] || "archivo";
+    if (parts.length > 1) {
+      const resFolder = ensureFolderPath(meta, parentId, parts.slice(0, -1), now, folderCache);
+      targetParentId = resFolder.targetParentId;
+      created.push(...resFolder.createdFolders);
+    }
     const item = {
       id: f.generatedId,
-      name: Buffer.from(f.originalname, "latin1").toString("utf8"),
+      name: origName,
       type: "file",
-      parentId,
+      parentId: targetParentId,
       size: f.size,
       mimeType: f.mimetype || "application/octet-stream",
       diskName: f.diskName,
@@ -234,7 +306,7 @@ app.post("/api/upload", upload.array("files"), (req, res) => {
       updatedAt: now,
     };
     meta.items.push(item);
-    return item;
+    created.push(item);
   });
   saveMeta(meta);
   res.status(201).json({ items: created });

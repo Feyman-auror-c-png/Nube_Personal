@@ -9,6 +9,11 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 ## [1.1.0] - 2026-10-31
 
 ### ✨ Añadido
+- **Subida de Carpetas Completas (Drag & Drop Recursivo y Selector)**:
+  - Soporte para arrastrar y soltar carpetas enteras desde el sistema operativo usando la API `webkitGetAsEntry` / `FileSystemDirectoryReader`, conservando todas las subcarpetas y archivos internos.
+  - Nuevo botón **`📁⬆️ Subir Carpeta`** en la barra lateral (`webkitdirectory`).
+- **Selectores Personalizados Interactivos (`.custom-select`) y Mejoras Visuales**:
+  - Reemplazo de los `<select>` nativos del navegador por menús desplegables personalizados con animaciones suaves, icono chevron rotatorio y marca de selección (`✓`).
 - **Estudio Markdown (`.md`) Avanzado en Vista Dividida**:
   - Creación directa de documentos `.md` desde el botón rápido `+ Nuevo .md` en la barra lateral.
   - Barra de herramientas interactiva para insertar encabezados (`H1`, `H2`), negritas, cursivas, listas de tareas (`- [ ]`), bloques de código, citas, tablas GFM y enlaces.
