@@ -1,0 +1,110 @@
+{
+  "items": [
+    {
+      "id": "d2bf2ddf-e67c-40f6-809c-cfca4078954f",
+      "name": "Documentos",
+      "type": "folder",
+      "parentId": null,
+      "size": 0,
+      "mimeType": "inode/directory",
+      "starred": true,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:12:38.959107+00:00",
+      "updatedAt": "2026-10-31T15:12:38.959107+00:00"
+    },
+    {
+      "id": "1a93a3ff-4e0c-47df-9e27-2b06f0c0cc94",
+      "name": "Proyectos",
+      "type": "folder",
+      "parentId": null,
+      "size": 0,
+      "mimeType": "inode/directory",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:12:38.959107+00:00",
+      "updatedAt": "2026-10-31T15:12:38.959107+00:00"
+    },
+    {
+      "id": "e1e7e3cb-1347-4830-96d1-50e8cf6daab0",
+      "name": "Bienvenida a tu Nube.md",
+      "type": "file",
+      "parentId": null,
+      "size": 2331,
+      "mimeType": "text/markdown",
+      "diskName": "e1e7e3cb-1347-4830-96d1-50e8cf6daab0.md",
+      "starred": true,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:12:38.959107+00:00",
+      "updatedAt": "2026-10-31T15:12:38.959107+00:00"
+    },
+    {
+      "id": "7d1b4795-f4a1-45c1-8b4c-1997f9b21d3d",
+      "name": "Portada Nimbus Cloud.svg",
+      "type": "file",
+      "parentId": null,
+      "size": 1191,
+      "mimeType": "image/svg+xml",
+      "diskName": "7d1b4795-f4a1-45c1-8b4c-1997f9b21d3d.svg",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:12:38.959107+00:00",
+      "updatedAt": "2026-10-31T15:12:38.959107+00:00"
+    },
+    {
+      "id": "e20534a2-409c-4922-8ddc-f2e95fca0d1d",
+      "name": "Roadmap Nube.csv",
+      "type": "file",
+      "parentId": null,
+      "size": 238,
+      "mimeType": "text/csv",
+      "diskName": "e20534a2-409c-4922-8ddc-f2e95fca0d1d.csv",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:12:38.959107+00:00",
+      "updatedAt": "2026-10-31T15:12:38.959107+00:00"
+    },
+    {
+      "id": "5f242181-2924-4d42-9b7f-cf5e42307e44",
+      "name": "Notas y Tareas.md",
+      "type": "file",
+      "parentId": "d2bf2ddf-e67c-40f6-809c-cfca4078954f",
+      "size": 514,
+      "mimeType": "text/markdown",
+      "diskName": "5f242181-2924-4d42-9b7f-cf5e42307e44.md",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:12:38.959107+00:00",
+      "updatedAt": "2026-10-31T15:12:38.959107+00:00"
+    },
+    {
+      "id": "8d4d9d07-84cc-4956-bbdd-2cd4a0caf20e",
+      "name": "demo-nube.js",
+      "type": "file",
+      "parentId": "1a93a3ff-4e0c-47df-9e27-2b06f0c0cc94",
+      "size": 506,
+      "mimeType": "application/javascript",
+      "diskName": "8d4d9d07-84cc-4956-bbdd-2cd4a0caf20e.js",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:12:38.959107+00:00",
+      "updatedAt": "2026-10-31T15:12:38.959107+00:00"
+    },
+    {
+      "id": "652a3533-5dc7-44ea-be57-c2f35808599f",
+      "name": "prueba",
+      "type": "folder",
+      "parentId": null,
+      "size": 0,
+      "mimeType": "inode/directory",
+      "starred": false,
+      "trashed": false,
+      "createdAt": "2026-10-31T15:20:31.004120+00:00",
+      "updatedAt": "2026-10-31T15:20:31.004120+00:00"
+    }
+  ],
+  "shares": [],
+  "settings": {
+    "quotaBytes": 5368709120,
+    "pinHash": ""
+  }
+}

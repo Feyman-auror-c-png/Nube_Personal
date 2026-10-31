@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 360" width="600" height="360">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="360" rx="24" fill="url(#bg)"/>
+  <circle cx="480" cy="80" r="90" fill="#6366f1" opacity="0.15"/>
+  <circle cx="120" cy="280" r="110" fill="#38bdf8" opacity="0.12"/>
+  <path d="M210 215 H395 A45 45 0 0 0 405 127 A65 65 0 0 0 280 105 A55 55 0 0 0 185 150 A40 40 0 0 0 210 215 Z" fill="url(#cloudGrad)"/>
+  <text x="300" y="275" font-family="system-ui, sans-serif" font-size="26" font-weight="bold" fill="#f8fafc" text-anchor="middle">Nimbus Personal Cloud</text>
+  <text x="300" y="308" font-family="system-ui, sans-serif" font-size="15" fill="#94a3b8" text-anchor="middle">Vista previa de gráficos vectoriales e imágenes</text>
+</svg>

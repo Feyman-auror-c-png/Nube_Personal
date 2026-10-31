@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nimbus Cloud — Mi Nube Personal</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Overlay global para Drag & Drop de archivos -->
+  <div id="dropzone-overlay" class="dropzone-overlay hidden">
+    <div class="dropzone-box">
+      <div class="dropzone-icon">☁️⬆️</div>
+      <h2>Suelta tus archivos aquí para subirlos</h2>
+      <p id="dropzone-target-label">Se guardarán en la carpeta actual</p>
+    </div>
+  </div>
+
+  <!-- VISTA PÚBLICA DE ENLACE COMPARTIDO (?share=TOKEN) -->
+  <div id="public-share-App" class="public-share-app hidden">
+    <header class="public-header">
+      <div class="brand" onclick="window.location.href='/'" style="cursor:pointer" title="Ir a mi nube">
+        <div class="brand-logo">☁️</div>
+        <div>
+          <span class="brand-title">Nimbus Cloud</span>
+          <span class="brand-badge">Enlace Compartido</span>
+        </div>
+      </div>
+      <div class="public-header-actions">
+        <button id="public-theme-btn" class="icon-btn" title="Cambiar tema">🌓</button>
+        <a href="/" class="btn btn-secondary">Ir a Mi Nube</a>
+      </div>
+    </header>
+    <main id="public-share-container" class="public-share-container"></main>
+  </div>
+
+  <!-- APLICACIÓN PRINCIPAL DE LA NUBE PERSONAL -->
+  <div id="main-cloud-app" class="app-layout">
+    <!-- Barra Lateral -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-logo">☁️</div>
+        <div>
+          <div class="brand-title">Nimbus Cloud</div>
+          <div class="brand-subtitle">Tu Nube Personal</div>
+        </div>
+      </div>
+
+      <div class="sidebar-cta">
+        <button class="btn btn-primary btn-block" id="btn-quick-upload">
+          <span>⬆️ Subir Archivos</span>
+        </button>
+        <div class="sidebar-quick-row">
+          <button class="btn btn-secondary btn-sm" id="btn-new-md" title="Crear nuevo documento Markdown (.md)">
+            📝 + Nuevo .md
+          </button>
+          <button class="btn btn-secondary btn-sm" id="btn-new-folder" title="Crear nueva carpeta">
+            📁 + Carpeta
+          </button>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-section="drive">
+          <span class="nav-icon">🗂️</span>
+          <span class="nav-label">Mi Unidad</span>
+        </button>
+        <button class="nav-item" data-section="recent">
+          <span class="nav-icon">🕒</span>
+          <span class="nav-label">Recientes</span>
+        </button>
+        <button class="nav-item" data-section="starred">
+          <span class="nav-icon">⭐</span>
+          <span class="nav-label">Destacados</span>
+        </button>
+        <button class="nav-item" data-section="markdown">
+          <span class="nav-icon">📝</span>
+          <span class="nav-label">Documentos .md</span>
+        </button>
+        <button class="nav-item" data-section="shares">
+          <span class="nav-icon">🔗</span>
+          <span class="nav-label">Compartidos</span>
+          <span class="nav-badge hidden" id="badge-shares">0</span>
+        </button>
+        <button class="nav-item" data-section="trash">
+          <span class="nav-icon">🗑️</span>
+          <span class="nav-label">Papelera</span>
+        </button>
+      </nav>
+
+      <div class="storage-card">
+        <div class="storage-header">
+          <span class="storage-title">💾 Almacenamiento</span>
+          <span class="storage-percent" id="storage-percent">0%</span>
+        </div>
+        <div class="storage-bar">
+          <div class="storage-bar-fill" id="storage-bar-fill" style="width: 2%"></div>
+        </div>
+        <div class="storage-meta" id="storage-meta-text">Calculando...</div>
+        <div class="storage-counts" id="storage-counts-text">0 archivos · 0 carpetas</div>
+      </div>
+    </aside>
+
+    <!-- Contenido Principal -->
+    <div class="main-area">
+      <!-- Barra Superior -->
+      <header class="topbar">
+        <div class="search-wrapper">
+          <span class="search-icon">🔍</span>
+          <input
+            type="text"
+            id="search-input"
+            placeholder="Buscar archivos, carpetas o notas .md... (Ctrl + K)"
+            autocomplete="off"
+          />
+          <button id="search-clear" class="search-clear hidden" title="Limpiar búsqueda">✕</button>
+        </div>
+
+        <div class="topbar-actions">
+          <div class="filter-pills" id="type-filters">
+            <button class="pill active" data-filter="all">Todos</button>
+            <button class="pill" data-filter="md">📝 .md</button>
+            <button class="pill" data-filter="image">🖼️ Imágenes</button>
+            <button class="pill" data-filter="media">🎬 Media</button>
+            <button class="pill" data-filter="code">💻 Código</button>
+            <button class="pill" data-filter="doc">📄 Docs</button>
+          </div>
+
+          <div class="divider-v"></div>
+
+          <select id="sort-select" class="sort-select" title="Ordenar por">
+            <option value="name-asc">Nombre (A-Z)</option>
+            <option value="name-desc">Nombre (Z-A)</option>
+            <option value="date-desc" selected>Más recientes</option>
+            <option value="size-desc">Mayor tamaño</option>
+          </select>
+
+          <div class="view-switcher">
+            <button class="icon-btn active" id="view-grid-btn" title="Vista en cuadrícula">⊞</button>
+            <button class="icon-btn" id="view-list-btn" title="Vista en lista">☰</button>
+          </div>
+
+          <button class="icon-btn" id="theme-toggle-btn" title="Cambiar modo oscuro/claro">🌓</button>
+        </div>
+      </header>
+
+      <!-- Barra de Ruta (Breadcrumbs) y Acciones de Carpeta -->
+      <div class="subbar">
+        <div class="breadcrumbs" id="breadcrumbs-bar">
+          <button class="crumb root-crumb" data-id="">🏠 Mi Unidad</button>
+        </div>
+        <div class="subbar-actions" id="subbar-actions">
+          <button class="btn btn-ghost btn-sm" id="btn-download-current-folder" title="Descargar carpeta actual en ZIP">
+            📦 Descargar ZIP
+          </button>
+          <button class="btn btn-danger btn-sm hidden" id="btn-empty-trash">
+            🗑️ Vaciar Papelera
+          </button>
+        </div>
+      </div>
+
+      <!-- Zona de Explorador de Archivos -->
+      <main class="explorer-content" id="explorer-drop-area">
+        <div id="items-container" class="items-grid"></div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Input oculto para subir archivos -->
+  <input type="file" id="hidden-file-input" multiple class="hidden" />
+
+  <!-- MODAL: PREVISUALIZADOR DE ARCHIVOS Y ESTUDIO MARKDOWN (.MD) -->
+  <div id="preview-modal" class="modal-backdrop hidden">
+    <div class="modal-window modal-xl">
+      <div class="modal-header">
+        <div class="preview-title-group">
+          <span id="preview-file-icon" class="preview-icon">📄</span>
+          <div>
+            <h3 id="preview-file-name">Nombre del archivo</h3>
+            <span id="preview-file-meta" class="preview-meta">Tamaño · Fecha</span>
+          </div>
+        </div>
+
+        <!-- Controles específicos cuando es Markdown (.md) o Código editable -->
+        <div id="preview-mode-tabs" class="mode-tabs hidden">
+          <button class="mode-tab active" data-mode="read">👁️ Vista Lectura</button>
+          <button class="mode-tab" data-mode="split">⚡ Vista Dividida (.md)</button>
+          <button class="mode-tab" data-mode="edit">✏️ Editor</button>
+        </div>
+
+        <!-- Controles específicos para Imágenes -->
+        <div id="preview-image-controls" class="mode-tabs hidden">
+          <button class="mode-tab" id="img-zoom-out" title="Alejar">➖</button>
+          <span id="img-zoom-label" class="zoom-label">100%</span>
+          <button class="mode-tab" id="img-zoom-in" title="Acercar">➕</button>
+          <button class="mode-tab" id="img-rotate" title="Rotar 90°">🔄 Rotar</button>
+          <button class="mode-tab" id="img-reset" title="Restablecer">Restablecer</button>
+        </div>
+
+        <div class="modal-header-actions">
+          <button id="preview-save-btn" class="btn btn-primary btn-sm hidden" title="Guardar cambios (Ctrl + S)">
+            💾 Guardar Cambios
+          </button>
+          <button id="preview-share-btn" class="btn btn-secondary btn-sm" title="Compartir este archivo">
+            🔗 Compartir
+          </button>
+          <button id="preview-download-btn" class="btn btn-secondary btn-sm" title="Descargar archivo">
+            ⬇️ Descargar
+          </button>
+          <button id="preview-close-btn" class="icon-btn" title="Cerrar (Esc)">✕</button>
+        </div>
+      </div>
+
+      <!-- Barra de herramientas Markdown (visible en modo Split o Edit para archivos .md) -->
+      <div id="md-toolbar" class="md-toolbar hidden">
+        <div class="md-tools-left">
+          <button type="button" class="md-tool-btn" data-md="h1" title="Título H1">H1</button>
+          <button type="button" class="md-tool-btn" data-md="h2" title="Subtítulo H2">H2</button>
+          <button type="button" class="md-tool-btn" data-md="bold" title="Negrita"><b>B</b></button>
+          <button type="button" class="md-tool-btn" data-md="italic" title="Cursiva"><i>I</i></button>
+          <button type="button" class="md-tool-btn" data-md="strike" title="Tachado"><s>S</s></button>
+          <span class="divider-v"></span>
+          <button type="button" class="md-tool-btn" data-md="task" title="Lista de tareas">☑️ Tarea</button>
+          <button type="button" class="md-tool-btn" data-md="ul" title="Lista">• Lista</button>
+          <button type="button" class="md-tool-btn" data-md="quote" title="Cita">❝ Cita</button>
+          <button type="button" class="md-tool-btn" data-md="code" title="Bloque de código">{ } Código</button>
+          <button type="button" class="md-tool-btn" data-md="table" title="Insertar tabla">▦ Tabla</button>
+          <button type="button" class="md-tool-btn" data-md="link" title="Insertar enlace">🔗 Enlace</button>
+        </div>
+        <div class="md-tools-right">
+          <span id="md-stats-counter" class="md-stats">0 palabras · 0 caracteres</span>
+        </div>
+      </div>
+
+      <div id="preview-body" class="modal-body preview-body"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: COMPARTIR ARCHIVO O CARPETA -->
+  <div id="share-modal" class="modal-backdrop hidden">
+    <div class="modal-window modal-md">
+      <div class="modal-header">
+        <div>
+          <h3>🔗 Compartir elemento</h3>
+          <p id="share-modal-subtitle" class="preview-meta"></p>
+        </div>
+        <button class="icon-btn" id="share-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="create-share-form" class="share-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="share-password">Contraseña opcional</label>
+              <input
+                type="password"
+                id="share-password"
+                placeholder="Sin contraseña (acceso directo)"
+                autocomplete="new-password"
+              />
+            </div>
+            <div class="form-group">
+              <label for="share-expiry">Expiración del enlace</label>
+              <select id="share-expiry">
+                <option value="0">Sin fecha de expiración</option>
+                <option value="1">En 1 hora</option>
+                <option value="24">En 24 horas</option>
+                <option value="168">En 7 días</option>
+                <option value="720">En 30 días</option>
+              </select>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">
+            ✨ Generar Enlace para Compartir
+          </button>
+        </form>
+
+        <div id="share-generated-box" class="share-result-box hidden">
+          <label>Enlace listo para compartir:</label>
+          <div class="share-url-row">
+            <input type="text" id="share-url-input" readonly />
+            <button type="button" class="btn btn-primary btn-sm" id="btn-copy-share-url">📋 Copiar</button>
+            <a id="btn-open-share-url" href="#" target="_blank" class="btn btn-secondary btn-sm">↗ Abrir</a>
+          </div>
+        </div>
+
+        <div class="existing-shares-section">
+          <h4>Enlaces activos de este elemento</h4>
+          <div id="item-shares-list" class="item-shares-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CREAR / RENOMBRAR / MOVER -->
+  <div id="dialog-modal" class="modal-backdrop hidden">
+    <div class="modal-window modal-sm">
+      <div class="modal-header">
+        <h3 id="dialog-title">Acción</h3>
+        <button class="icon-btn" id="dialog-close">✕</button>
+      </div>
+      <form id="dialog-form" class="modal-body">
+        <div id="dialog-content"></div>
+        <div class="dialog-footer">
+          <button type="button" class="btn btn-secondary" id="dialog-cancel">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="dialog-confirm">Confirmar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Menú contextual (Clic derecho) -->
+  <div id="context-menu" class="context-menu hidden"></div>
+
+  <!-- Contenedor de notificaciones Toast -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

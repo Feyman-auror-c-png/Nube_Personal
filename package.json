@@ -1,0 +1,14 @@
+{
+  "name": "nube-personal",
+  "version": "1.0.0",
+  "description": "Nube Personal Web con visualizador/editor de Markdown (.md), vista previa multimedia, carpetas y enlaces compartidos",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1"
+  }
+}
