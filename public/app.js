@@ -385,41 +385,117 @@ function renderUserProfileWidget() {
 }
 
 function openUsersDirectoryModal() {
+  const isAdmin = state.currentUser && state.currentUser.role === "admin";
+
   const rowsHtml = state.users
     .map((u) => {
       const isMe = state.currentUser && u.id === state.currentUser.id;
+      const quotaGB = Math.max(0.1, +(Number(u.quotaBytes || 5 * 1024 ** 3) / 1024 ** 3).toFixed(2));
       return `
-        <div class="share-list-item" style="margin-bottom:8px;">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <div class="user-avatar" style="width:32px;height:32px;font-size:0.8rem;background:${escapeHtml(
-              u.avatarColor || "#38bdf8"
-            )}">${escapeHtml((u.displayName || u.username).slice(0, 2).toUpperCase())}</div>
-            <div>
-              <strong>${escapeHtml(u.displayName)}</strong> ${
+        <div class="share-list-item" style="margin-bottom:10px;flex-direction:column;align-items:stretch;gap:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="user-avatar" style="width:34px;height:34px;font-size:0.82rem;background:${escapeHtml(
+                u.avatarColor || "#38bdf8"
+              )}">${escapeHtml((u.displayName || u.username).slice(0, 2).toUpperCase())}</div>
+              <div>
+                <strong>${escapeHtml(u.displayName)}</strong> ${
         isMe ? '<span class="brand-badge">Tú</span>' : ""
       }
-              <div class="preview-meta">@${escapeHtml(u.username)} · ${
+                <div class="preview-meta">@${escapeHtml(u.username)} · ${
         u.filesCount || 0
-      } archivos (${formatBytes(u.usedBytes || 0)})</div>
+      } archivos · Usado: <strong>${formatBytes(u.usedBytes || 0)}</strong> de <strong>${formatBytes(
+        u.quotaBytes || 0
+      )}</strong></div>
+              </div>
             </div>
+            <span class="badge-pill" style="background:var(--bg-input);border:1px solid var(--border-color)">${
+              u.role === "admin" ? "👑 Admin" : "👤 Usuario"
+            }</span>
           </div>
-          <span class="preview-meta">${u.role === "admin" ? "👑 Admin" : "👤 Usuario"}</span>
+          ${
+            isAdmin
+              ? `<div style="display:flex;align-items:center;gap:8px;padding-top:8px;border-top:1px solid var(--border-subtle);">
+                  <label style="font-size:0.76rem;color:var(--text-secondary);white-space:nowrap;">Límite (GB):</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0.1"
+                    max="10000"
+                    class="quota-gb-input"
+                    data-uid="${u.id}"
+                    value="${quotaGB}"
+                    style="width:90px;padding:5px 8px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-input);color:var(--text-primary);font-size:0.82rem;"
+                  />
+                  <select class="role-select-admin" data-uid="${u.id}">
+                    <option value="admin" ${u.role === "admin" ? "selected" : ""}>👑 Admin</option>
+                    <option value="user" ${u.role !== "admin" ? "selected" : ""}>👤 Usuario</option>
+                  </select>
+                  <button type="button" class="btn btn-primary btn-sm btn-save-user-quota" data-uid="${
+                    u.id
+                  }" style="margin-left:auto;">💾 Aplicar</button>
+                </div>`
+              : ""
+          }
         </div>
       `;
     })
     .join("");
 
   openDialogModal({
-    title: `👥 Usuarios de Nimbus Cloud (${state.users.length})`,
-    confirmText: "Cerrar",
+    title: isAdmin
+      ? `👑 Administración de Usuarios y Almacenamiento (${state.users.length})`
+      : `👥 Usuarios de Nimbus Cloud (${state.users.length})`,
+    confirmText: "Listo",
     contentHtml: `
       <p class="preview-meta" style="margin-bottom:12px;">
-        Cada usuario tiene su propio espacio privado y puede compartir archivos o carpetas con los demás.
+        ${
+          isAdmin
+            ? "Como <strong>Administrador</strong>, puedes modificar tu propio límite de almacenamiento (en GB) y el de cualquier otro usuario, así como sus roles."
+            : "Cada usuario tiene su propio espacio privado y puede compartir archivos o carpetas con los demás."
+        }
       </p>
-      <div style="max-height:260px;overflow-y:auto;">${rowsHtml}</div>
+      <div id="admin-users-list-wrap" style="max-height:320px;overflow-y:auto;">${rowsHtml}</div>
     `,
     onConfirm: async () => {},
   });
+
+  if (isAdmin) {
+    const wrap = document.getElementById("admin-users-list-wrap");
+    if (wrap) {
+      wrap.querySelectorAll(".btn-save-user-quota").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const uid = btn.dataset.uid;
+          const gbInput = wrap.querySelector(`.quota-gb-input[data-uid="${uid}"]`);
+          const roleSel = wrap.querySelector(`.role-select-admin[data-uid="${uid}"]`);
+          const quotaGB = parseFloat(gbInput ? gbInput.value : "5");
+          const role = roleSel ? roleSel.value : "user";
+          if (!quotaGB || quotaGB <= 0) {
+            showToast("Ingresa una cantidad válida en GB", "⚠️");
+            return;
+          }
+          const res = await apiFetch(`/api/users/${uid}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ quotaGB, role }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (state.currentUser && state.currentUser.id === uid) {
+              state.currentUser = data.user;
+              renderUserProfileWidget();
+            }
+            await fetchCloudData();
+            showToast(`Cuota actualizada a ${quotaGB} GB para @${data.user.username}`, "💾");
+            openUsersDirectoryModal();
+          } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.error || "No se pudo actualizar la cuota", "⚠️");
+          }
+        });
+      });
+    }
+  }
 }
 
 // ============================================================================
@@ -2021,6 +2097,12 @@ function setupAuthEvents() {
   });
 
   document.getElementById("btn-users-directory").addEventListener("click", openUsersDirectoryModal);
+  const storageCard = document.querySelector(".storage-card");
+  if (storageCard) {
+    storageCard.style.cursor = "pointer";
+    storageCard.title = "Clic para administrar cuotas de almacenamiento y usuarios";
+    storageCard.addEventListener("click", openUsersDirectoryModal);
+  }
 }
 
 function initApp() {

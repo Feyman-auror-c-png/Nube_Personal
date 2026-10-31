@@ -1043,6 +1043,23 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
                 self.send_json(400, {"error": "No se seleccionaron archivos ni carpetas válidas"})
                 return
 
+            # Verificar cuota de almacenamiento del usuario
+            current_used = sum(
+                it.get("size", 0)
+                for it in meta["items"]
+                if it.get("ownerId") == user["id"] and it["type"] == "file" and not it.get("trashed", False)
+            )
+            incoming_bytes = sum(len(uf["data"]) for uf in uploaded_files)
+            user_quota = user.get("quotaBytes", 5 * 1024 * 1024 * 1024)
+            if current_used + incoming_bytes > user_quota:
+                self.send_json(
+                    413,
+                    {
+                        "error": f"Espacio insuficiente: esta subida supera tu cuota asignada ({round(user_quota / (1024**3), 2)} GB)."
+                    },
+                )
+                return
+
             now = now_iso()
             created_items = []
             folder_cache = {}
@@ -1221,6 +1238,40 @@ class CloudRequestHandler(BaseHTTPRequestHandler):
         user, _ = self.get_current_user(meta, query)
         if not user:
             self.send_json(401, {"error": "No autenticado"})
+            return
+
+        # --- API: Modificar cuota de almacenamiento o rol de cualquier usuario (Solo Admin) ---
+        if path.startswith("/api/users/"):
+            if user.get("role") != "admin":
+                self.send_json(403, {"error": "Solo un Administrador puede modificar las cuotas de almacenamiento o roles"})
+                return
+            target_uid = path.split("/")[3]
+            target_u = next((u for u in meta["users"] if u["id"] == target_uid), None)
+            if not target_u:
+                self.send_json(404, {"error": "Usuario no encontrado"})
+                return
+
+            body = self.read_json_body()
+            if "quotaGB" in body:
+                try:
+                    gb = float(body["quotaGB"])
+                    if gb > 0:
+                        target_u["quotaBytes"] = int(gb * 1024 * 1024 * 1024)
+                except Exception:
+                    pass
+            elif "quotaBytes" in body:
+                try:
+                    qb = int(body["quotaBytes"])
+                    if qb > 0:
+                        target_u["quotaBytes"] = qb
+                except Exception:
+                    pass
+
+            if "role" in body and body["role"] in ("admin", "user"):
+                target_u["role"] = body["role"]
+
+            save_meta(meta)
+            self.send_json(200, {"user": sanitize_user(target_u)})
             return
 
         if path.startswith("/api/items/"):
